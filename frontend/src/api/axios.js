@@ -1,17 +1,13 @@
-// src/api/axios.js
-// Creates a pre-configured axios instance with the Flask backend URL baked in.
-// Think of this like a Java HttpClient configured with a base URL —
-// every API call in the app imports this instead of raw axios.
-
 import axios from 'axios'
 
+// We define the URL first, then pass it into the config object
+const API_URL = import.meta.env.VITE_API_URL || 'https://buckeyematch.onrender.com/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: API_URL
 })
 
-// This is an "interceptor" — it runs before every request automatically.
-// It reads the JWT token from localStorage and adds it to the Authorization header.
-// Think of it like a Java filter that runs on every outgoing request.
+// Keep your interceptor as it was
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {

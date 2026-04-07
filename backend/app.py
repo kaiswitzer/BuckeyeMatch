@@ -19,7 +19,10 @@ def create_app():
 
     # Allow the React frontend (running on port 5173) to talk to this server.
     # Without this, the browser blocks cross-origin requests — like a firewall rule.
-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}})
+    CORS(app, resources={r"/api/*": {"origins": [
+    "http://localhost:5173", 
+    "https://buckeyematch-frontend.onrender.com"
+]}})
 
     # Connect SQLAlchemy to the app and create all tables if they don't exist.
     # db.init_app() is like injecting the app context into the database layer.
