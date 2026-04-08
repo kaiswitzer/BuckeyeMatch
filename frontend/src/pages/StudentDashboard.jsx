@@ -112,6 +112,11 @@ function MilestoneModal({ matches, onClose }) {
   const [savedOutcome, setSavedOutcome] = useState('')
   const [priorMilestones, setPriorMilestones] = useState([])
   const [loadingPrior, setLoadingPrior]       = useState(true)
+  const [editingId, setEditingId]       = useState(null)
+  const [editOutcome, setEditOutcome]   = useState('')
+  const [editMatchId, setEditMatchId]   = useState('')
+  const [savingEdit, setSavingEdit]     = useState(false)
+  const [deletingId, setDeletingId]     = useState(null)
 
   const OUTCOMES = [
     { value: 'interview', emoji: '📅', label: 'Got an interview' },
@@ -129,18 +134,21 @@ function MilestoneModal({ matches, onClose }) {
     job:       { emoji: '🏆', headline: 'You got the job!',          sub: "This is what it's all about. Congratulations."  },
   }
 
-  useEffect(() => {
-    async function fetchPrior() {
-      try {
-        const res = await api.get('/milestones')
-        setPriorMilestones(res.data.milestones ?? [])
-      } catch (err) {
-        console.error('Could not load prior milestones:', err)
-      } finally {
-        setLoadingPrior(false)
-      }
+  const refreshPrior = async () => {
+    try {
+      const res = await api.get('/milestones')
+      setPriorMilestones(res.data.milestones ?? [])
+    } catch (err) {
+      console.error('Could not load prior milestones:', err)
     }
-    fetchPrior()
+  }
+
+  useEffect(() => {
+    async function load() {
+      await refreshPrior()
+      setLoadingPrior(false)
+    }
+    load()
   }, [])
 
   const formatDate = (iso) =>
@@ -172,6 +180,52 @@ function MilestoneModal({ matches, onClose }) {
     }
   }
 
+  const startEdit = (m) => {
+    setEditingId(m.id)
+    setEditOutcome(m.outcome_type)
+    setEditMatchId(m.match_id != null ? String(m.match_id) : '')
+    setError('')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditOutcome('')
+    setEditMatchId('')
+  }
+
+  const saveEdit = async () => {
+    if (!editingId || !editOutcome) return
+    setSavingEdit(true)
+    setError('')
+    try {
+      await api.patch(`/milestones/${editingId}`, {
+        outcome_type: editOutcome,
+        match_id: editMatchId ? parseInt(editMatchId, 10) : null,
+      })
+      await refreshPrior()
+      cancelEdit()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not update.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const removeMilestone = async (id) => {
+    if (!window.confirm('Remove this win from your log?')) return
+    setDeletingId(id)
+    setError('')
+    try {
+      await api.delete(`/milestones/${id}`)
+      await refreshPrior()
+      if (editingId === id) cancelEdit()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not delete.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const cel = CELEBRATION[savedOutcome]
 
   return (
@@ -200,16 +254,81 @@ function MilestoneModal({ matches, onClose }) {
                     {priorMilestones.map(m => {
                       const ol = OUTCOME_LABELS[m.outcome_type]
                       const matchLabel = getMatchLabel(m.match_id)
-                      return (
-                        <div key={m.id} className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">{ol?.emoji}</span>
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{ol?.label}</p>
-                              {matchLabel && <p className="text-xs text-gray-400">{matchLabel}</p>}
+                      if (editingId === m.id) {
+                        return (
+                          <div key={m.id} className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 space-y-3">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edit win</p>
+                            <div className="space-y-2">
+                              {OUTCOMES.map(opt => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setEditOutcome(opt.value)}
+                                  className={`w-full text-left px-3 py-2 rounded-lg border text-xs font-medium ${editOutcome === opt.value ? 'bg-red-50' : 'border-gray-200'}`}
+                                  style={editOutcome === opt.value ? { borderColor: '#BB0000', color: '#BB0000' } : {}}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                            {matches.length > 0 && (
+                              <select
+                                value={editMatchId}
+                                onChange={e => setEditMatchId(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                              >
+                                <option value="">Not sure / no match involved</option>
+                                {matches.map(({ match, alumni }) => (
+                                  <option key={match.id} value={match.id}>
+                                    {alumni.first_name} {alumni.last_name} · {alumni.current_company}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                            <div className="flex gap-2 justify-end">
+                              <button type="button" onClick={cancelEdit} className="text-sm text-gray-500 px-3 py-1.5">
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={saveEdit}
+                                disabled={savingEdit || !editOutcome}
+                                className="text-sm font-medium text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                                style={{ backgroundColor: '#BB0000' }}
+                              >
+                                {savingEdit ? 'Saving...' : 'Save'}
+                              </button>
                             </div>
                           </div>
-                          <span className="text-xs text-gray-400">{formatDate(m.logged_at)}</span>
+                        )
+                      }
+                      return (
+                        <div key={m.id} className="flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-base flex-shrink-0">{ol?.emoji}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800">{ol?.label}</p>
+                              {matchLabel && <p className="text-xs text-gray-400 truncate">{matchLabel}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs text-gray-400">{formatDate(m.logged_at)}</span>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(m)}
+                              className="text-xs font-medium text-gray-500 hover:text-gray-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMilestone(m.id)}
+                              disabled={deletingId === m.id}
+                              className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                            >
+                              {deletingId === m.id ? '…' : 'Delete'}
+                            </button>
+                          </div>
                         </div>
                       )
                     })}
@@ -300,21 +419,41 @@ export default function StudentDashboard() {
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState(null)
   const [showMilestone, setShowMilestone] = useState(false)
+  const [runMatchingLoading, setRunMatchingLoading] = useState(false)
+  const [matchRunMessage, setMatchRunMessage]       = useState('')
+
+  const fetchMatches = async () => {
+    try {
+      const res = await api.get('/matches/mine')
+      setMatches(res.data.matches ?? [])
+    } catch (err) {
+      console.error('Failed to load matches:', err)
+      setError('Something went wrong loading your matches. Try refreshing.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchMatches() {
-      try {
-        const res = await api.get('/matches/mine')
-        setMatches(res.data.matches ?? [])
-      } catch (err) {
-        console.error('Failed to load matches:', err)
-        setError('Something went wrong loading your matches. Try refreshing.')
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchMatches()
   }, [])
+
+  const handleRunMatching = async () => {
+    setMatchRunMessage('')
+    setError(null)
+    setRunMatchingLoading(true)
+    try {
+      const res = await api.post('/matches/run')
+      if (res.data?.message) {
+        setMatchRunMessage(res.data.message)
+      }
+      await fetchMatches()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not run matching. Try again.')
+    } finally {
+      setRunMatchingLoading(false)
+    }
+  }
 
   const handleLogout = () => { logout(); navigate('/') }
   const firstName = user?.first_name ?? 'there'
@@ -381,7 +520,28 @@ export default function StudentDashboard() {
           <div className="bg-red-50 border border-red-100 rounded-2xl px-6 py-5 text-sm text-red-600">{error}</div>
         )}
 
-        {!loading && !error && visibleMatches.length === 0 && <EmptyState />}
+        {!loading && !error && visibleMatches.length === 0 && (
+          <div className="flex flex-col gap-4">
+            <EmptyState />
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-5 flex flex-col items-center text-center gap-3">
+              <p className="text-sm text-gray-600">
+                Finished onboarding recently or know a new alum joined? Run matching again to find them (your targets must overlap their company, and they must be open to connect).
+              </p>
+              <button
+                type="button"
+                onClick={handleRunMatching}
+                disabled={runMatchingLoading}
+                className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: '#BB0000' }}
+              >
+                {runMatchingLoading ? 'Searching…' : 'Look for matches'}
+              </button>
+              {matchRunMessage && (
+                <p className="text-sm text-gray-500">{matchRunMessage}</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {!loading && !error && visibleMatches.length > 0 && (
           <div className="flex flex-col gap-4">

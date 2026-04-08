@@ -243,6 +243,8 @@ export default function StudentProfile() {
                 onChange={e => setBasic({ ...basic, year: e.target.value })}
                 className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
               >
+                <option value="freshman">Freshman</option>
+                <option value="sophomore">Sophomore</option>
                 <option value="junior">Junior</option>
                 <option value="senior">Senior</option>
               </select>

@@ -75,8 +75,8 @@ def create_student_profile():
         if not data.get(field):
             return jsonify({'error': f'{field} is required'}), 400
 
-    if data['year'] not in ('junior', 'senior'):
-        return jsonify({'error': 'Year must be junior or senior'}), 400
+    if data['year'] not in ('freshman', 'sophomore', 'junior', 'senior'):
+        return jsonify({'error': 'Year must be freshman, sophomore, junior, or senior'}), 400
 
     # Check if profile already exists — if so, update it instead of creating a duplicate
     existing = StudentProfile.query.filter_by(user_id=user.id).first()

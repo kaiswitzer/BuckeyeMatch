@@ -89,6 +89,72 @@ def log_milestone():
     }), 201
 
 
+def _milestone_for_student_or_404(user, milestone_id):
+    profile = StudentProfile.query.filter_by(user_id=user.id).first()
+    if not profile:
+        return None, (jsonify({'error': 'Profile not found'}), 404)
+    milestone = Milestone.query.get(milestone_id)
+    if not milestone:
+        return None, (jsonify({'error': 'Milestone not found'}), 404)
+    if milestone.student_id != profile.id:
+        return None, (jsonify({'error': 'Forbidden'}), 403)
+    return milestone, None
+
+
+@milestones_bp.route('/<int:milestone_id>', methods=['PATCH'])
+def update_milestone(milestone_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if user.account_type != 'student':
+        return jsonify({'error': 'Only students can edit milestones'}), 403
+
+    milestone, err = _milestone_for_student_or_404(user, milestone_id)
+    if err:
+        return err
+
+    data = request.get_json() or {}
+    if 'outcome_type' in data:
+        ot = data['outcome_type']
+        if ot not in ('interview', 'offer', 'job'):
+            return jsonify({'error': 'outcome_type must be interview, offer, or job'}), 400
+        milestone.outcome_type = ot
+
+    if 'match_id' in data:
+        mid = data['match_id']
+        if mid is None or mid == '':
+            milestone.match_id = None
+        else:
+            profile = StudentProfile.query.filter_by(user_id=user.id).first()
+            match = Match.query.get(int(mid))
+            if not match or match.student_id != profile.id:
+                return jsonify({'error': 'Invalid match for this student'}), 400
+            milestone.match_id = match.id
+
+    if 'notes' in data:
+        milestone.notes = data.get('notes')
+
+    db.session.commit()
+    return jsonify({'message': 'Milestone updated', 'milestone': milestone.to_dict()}), 200
+
+
+@milestones_bp.route('/<int:milestone_id>', methods=['DELETE'])
+def delete_milestone(milestone_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if user.account_type != 'student':
+        return jsonify({'error': 'Only students can delete milestones'}), 403
+
+    milestone, err = _milestone_for_student_or_404(user, milestone_id)
+    if err:
+        return err
+
+    db.session.delete(milestone)
+    db.session.commit()
+    return jsonify({'message': 'Milestone deleted'}), 200
+
+
 @milestones_bp.route('/rate/<int:match_id>', methods=['POST'])
 def rate_match(match_id):
     """

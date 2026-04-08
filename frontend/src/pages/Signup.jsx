@@ -14,8 +14,10 @@ export default function Signup() {
   const [form, setForm] = useState({
     email: '',
     password: '',
+    password_confirm: '',
     account_type: searchParams.get('type') || 'student'
   })
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -28,10 +30,18 @@ export default function Signup() {
     e.preventDefault()
     setError('')
     setSuccess('')
+    if (form.password !== form.password_confirm) {
+      setError('Passwords do not match.')
+      return
+    }
     setLoading(true)
 
     try {
-      await api.post('/auth/signup', form)
+      await api.post('/auth/signup', {
+        email: form.email,
+        password: form.password,
+        account_type: form.account_type,
+      })
       setSuccess('Account created! Check your OSU email to verify your address, then log in.')
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Please try again.')
@@ -117,13 +127,39 @@ export default function Signup() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="At least 8 characters"
+                required
+                minLength={8}
+                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 pr-16 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirm password
+            </label>
             <input
-              type="password"
-              name="password"
-              value={form.password}
+              type={showPassword ? 'text' : 'password'}
+              name="password_confirm"
+              value={form.password_confirm}
               onChange={handleChange}
-              placeholder="At least 8 characters"
+              placeholder="Re-enter your password"
               required
+              minLength={8}
               className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
             />
           </div>

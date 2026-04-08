@@ -226,6 +226,8 @@ export default function StudentOnboarding() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                 <select name="year" value={basicInfo.year} onChange={handleBasicChange}
                   className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200">
+                  <option value="freshman">Freshman</option>
+                  <option value="sophomore">Sophomore</option>
                   <option value="junior">Junior</option>
                   <option value="senior">Senior</option>
                 </select>
