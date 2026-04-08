@@ -1,10 +1,20 @@
 import axios from 'axios'
 
-// We define the URL first, then pass it into the config object
-const API_URL = import.meta.env.VITE_API_URL || 'https://buckeyematch.onrender.com/api';
+const DEFAULT_PROD_API_URL = 'https://buckeyematch.onrender.com/api'
+
+function resolveBaseURL() {
+  // In dev, prefer the Vite proxy (`/api` → http://localhost:5001)
+  if (import.meta.env.DEV) return import.meta.env.VITE_API_URL || '/api'
+  return import.meta.env.VITE_API_URL || DEFAULT_PROD_API_URL
+}
+
+const API_URL = resolveBaseURL()
 
 const api = axios.create({
-  baseURL: API_URL
+  baseURL: API_URL,
+  headers: {
+    Accept: 'application/json',
+  },
 })
 
 // Keep your interceptor as it was
@@ -15,5 +25,26 @@ api.interceptors.request.use((config) => {
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => {
+    const contentType = String(response.headers?.['content-type'] || '').toLowerCase()
+    const looksLikeHtml =
+      contentType.includes('text/html') ||
+      (typeof response.data === 'string' && /<!doctype\s+html|<html[\s>]/i.test(response.data))
+
+    if (looksLikeHtml) {
+      const err = new Error(
+        `API returned HTML (likely hit Vite dev server). baseURL=${API_URL} url=${response.config?.url}`
+      )
+      err.name = 'UnexpectedHtmlResponseError'
+      err.response = response
+      throw err
+    }
+
+    return response
+  },
+  (error) => Promise.reject(error)
+)
 
 export default api

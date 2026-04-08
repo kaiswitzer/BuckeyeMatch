@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 function YearBadge({ year }) {
   return (
@@ -200,6 +201,7 @@ export default function AlumniDashboard() {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+  const [headerName, setHeaderName] = useState('')
 
   useEffect(() => {
     async function fetchMatches() {
@@ -216,6 +218,21 @@ export default function AlumniDashboard() {
     fetchMatches()
   }, [])
 
+  useEffect(() => {
+    async function fetchHeaderName() {
+      try {
+        const res = await api.get('/profiles/alumni/me')
+        const first = res.data?.first_name ?? ''
+        const last = res.data?.last_name ?? ''
+        const full = `${first} ${last}`.trim()
+        setHeaderName(full)
+      } catch {
+        // Fall back to AuthContext user below
+      }
+    }
+    fetchHeaderName()
+  }, [])
+
   const handleRespond = (matchId, newStatus) => {
     // Could re-sort here in the future — for now cards update in place
   }
@@ -226,26 +243,29 @@ export default function AlumniDashboard() {
   }
 
   const firstName = user?.first_name ?? 'there'
+  const displayName = headerName || `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="font-bold text-base tracking-tight hover:opacity-80 transition-opacity"
-            style={{ color: '#BB0000' }}
-          >
-            Buckeye Match
-          </Link>
+      <AppHeader
+        title="Dashboard"
+        maxWidthClassName="max-w-2xl"
+        right={(
           <div className="flex items-center gap-4">
+            {user?.is_admin && (
+              <Link
+                to="/admin"
+                className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+                style={{ borderColor: '#BB0000', color: '#BB0000' }}
+              >
+                Admin
+              </Link>
+            )}
             <button
               onClick={() => navigate('/profile/alumni')}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             >
-              {user?.first_name} {user?.last_name}
+              {displayName}
             </button>
             <button
               onClick={handleLogout}
@@ -254,8 +274,8 @@ export default function AlumniDashboard() {
               Log out
             </button>
           </div>
-        </div>
-      </header>
+        )}
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
         <div>

@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 export default function Signup() {
   const [searchParams] = useSearchParams()
@@ -38,7 +39,7 @@ export default function Signup() {
 
     try {
       await api.post('/auth/signup', {
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         password: form.password,
         account_type: form.account_type,
       })
@@ -52,20 +53,10 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-md mx-auto w-full px-4 py-4 flex items-center justify-between">
-          <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="font-bold text-base tracking-tight hover:opacity-80 transition-opacity"
-            style={{ color: '#BB0000' }}
-          >
-            Buckeye Match
-          </Link>
-          <span className="text-sm text-gray-400">Sign up</span>
-        </div>
-      </header>
+      <AppHeader
+        title="Sign up"
+        maxWidthClassName="max-w-md"
+      />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4">
 

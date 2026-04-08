@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 function AvailabilityBadge({ availability }) {
   const config = {
@@ -421,6 +422,7 @@ export default function StudentDashboard() {
   const [showMilestone, setShowMilestone] = useState(false)
   const [runMatchingLoading, setRunMatchingLoading] = useState(false)
   const [matchRunMessage, setMatchRunMessage]       = useState('')
+  const [headerName, setHeaderName] = useState('')
 
   const fetchMatches = async () => {
     try {
@@ -436,6 +438,21 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     fetchMatches()
+  }, [])
+
+  useEffect(() => {
+    async function fetchHeaderName() {
+      try {
+        const res = await api.get('/profiles/student/me')
+        const first = res.data?.first_name ?? ''
+        const last = res.data?.last_name ?? ''
+        const full = `${first} ${last}`.trim()
+        setHeaderName(full)
+      } catch {
+        // Fall back to AuthContext user below
+      }
+    }
+    fetchHeaderName()
   }, [])
 
   const handleRunMatching = async () => {
@@ -457,21 +474,25 @@ export default function StudentDashboard() {
 
   const handleLogout = () => { logout(); navigate('/') }
   const firstName = user?.first_name ?? 'there'
+  const displayName = headerName || `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()
   const visibleMatches = matches.filter(({ match }) => match?.status !== 'passed')
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="font-bold text-base tracking-tight hover:opacity-80 transition-opacity"
-            style={{ color: '#BB0000' }}
-          >
-            Buckeye Match
-          </Link>
+      <AppHeader
+        title="Dashboard"
+        maxWidthClassName="max-w-2xl"
+        right={(
           <div className="flex items-center gap-4">
+            {user?.is_admin && (
+              <Link
+                to="/admin"
+                className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+                style={{ borderColor: '#BB0000', color: '#BB0000' }}
+              >
+                Admin
+              </Link>
+            )}
             <button
               onClick={() => setShowMilestone(true)}
               className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
@@ -483,14 +504,14 @@ export default function StudentDashboard() {
               onClick={() => navigate('/profile/student')}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             >
-              {user?.first_name} {user?.last_name}
+              {displayName}
             </button>
             <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-gray-700 transition-colors">
               Log out
             </button>
           </div>
-        </div>
-      </header>
+        )}
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
         <div>

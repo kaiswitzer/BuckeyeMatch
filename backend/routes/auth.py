@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
 import re
+import os
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -46,6 +47,15 @@ def decode_token(token, expected_purpose='auth'):
     if payload.get('purpose') != expected_purpose:
         raise ValueError('Wrong token purpose')
     return payload
+
+
+def _admin_email_allowlist():
+    """
+    Comma-separated list of emails that should be forced admin at login time.
+    This is a bootstrap mechanism for dev/testing and for initial Render setup.
+    """
+    raw = os.environ.get('ADMIN_EMAILS', 'admin.1@osu.edu')
+    return {e.strip().lower() for e in raw.split(',') if e.strip()}
 
 
 # ─── SIGNUP ─────────────────────────────────────────────────────────────────
@@ -180,6 +190,12 @@ def login():
 
     # Generate a 7-day auth token
     auth_token = generate_token(user.id, purpose='auth', expires_in_hours=168)
+
+    # Bootstrap admin: if this email is allowlisted, ensure is_admin=True at login.
+    # This makes admin access work on fresh DBs (local + Render) without manual DB edits.
+    if user.email in _admin_email_allowlist() and not getattr(user, 'is_admin', False):
+        user.is_admin = True
+        db.session.commit()
 
     return jsonify({
         'token': auth_token,

@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../context/AuthContext'
+import AppHeader from '../components/AppHeader'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -28,11 +29,20 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await api.post('/auth/login', form)
+      const payload = {
+        ...form,
+        email: form.email.trim().toLowerCase(),
+      }
+      const res = await api.post('/auth/login', payload)
       const { token, user } = res.data
 
       // Save to AuthContext + localStorage
       login(token, user)
+
+      if (user?.is_admin) {
+        navigate('/admin')
+        return
+      }
 
       // Route based on account type AND whether they've completed onboarding.
       // has_profile is true if the user has at least submitted step 1 of onboarding.
@@ -53,20 +63,10 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-md mx-auto w-full px-4 py-4 flex items-center justify-between">
-          <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="font-bold text-base tracking-tight hover:opacity-80 transition-opacity"
-            style={{ color: '#BB0000' }}
-          >
-            Buckeye Match
-          </Link>
-          <span className="text-sm text-gray-400">Log in</span>
-        </div>
-      </header>
+      <AppHeader
+        title="Log in"
+        maxWidthClassName="max-w-md"
+      />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 w-full max-w-md p-8">

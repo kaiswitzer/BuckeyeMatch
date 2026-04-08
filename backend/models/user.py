@@ -18,6 +18,9 @@ class User(db.Model):
     # False until they click the verification link in their OSU email
     is_verified = db.Column(db.Boolean, nullable=False, default=False)
 
+    # Admin flag (v1). Stored as BOOLEAN if supported, otherwise SQLite treats as 0/1.
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships — lets you do user.student_profile directly in code
@@ -36,6 +39,7 @@ class User(db.Model):
             'email': self.email,
             'account_type': self.account_type,
             'is_verified': self.is_verified,
+            'is_admin': self.is_admin,
             'created_at': self.created_at.isoformat(),
             # True if the user has completed step 1 of onboarding
             'has_profile': profile is not None,

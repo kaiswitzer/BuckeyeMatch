@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 function AvailabilityBadge({ availability }) {
   const config = {
@@ -76,18 +77,12 @@ export default function AlumniProfileView() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button
-            onClick={() => navigate('/dashboard/student')}
-            className="text-gray-400 hover:text-gray-700 transition-colors text-lg"
-          >←</button>
-          <span className="font-bold text-base tracking-tight" style={{ color: '#BB0000' }}>
-            Alumni Profile
-          </span>
-        </div>
-      </header>
+      <AppHeader
+        title="Alumni Profile"
+        showBack
+        onBack={() => navigate('/dashboard/student')}
+        maxWidthClassName="max-w-2xl"
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-4">
 

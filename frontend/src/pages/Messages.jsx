@@ -10,9 +10,10 @@
 //   POST /api/messages/<matchId>  — send a new message
 
 import { useEffect, useState, useRef } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 // ─── SINGLE MESSAGE BUBBLE ───────────────────────────────────────────────────
 // Renders one message. If the logged-in user sent it, it appears on the right
@@ -170,42 +171,12 @@ export default function Messages() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
 
-      {/* ── Top nav ── */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-
-          {/* Back button — goes to their dashboard */}
-          <button
-            onClick={() => navigate(isStudent ? '/dashboard/student' : '/dashboard/alumni')}
-            className="text-gray-400 hover:text-gray-700 transition-colors text-lg leading-none"
-          >
-            ←
-          </button>
-
-          {/* Other person's avatar + name */}
-          {otherName && (
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                style={{ backgroundColor: '#BB0000' }}
-              >
-                {otherName.split(' ').map(n => n[0]).join('').toUpperCase()}
-              </div>
-              <span className="font-semibold text-gray-900 text-sm">{otherName}</span>
-            </div>
-          )}
-
-          {/* Wordmark pushed to right */}
-          <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="ml-auto font-bold text-sm tracking-tight hover:opacity-80 transition-opacity"
-            style={{ color: '#BB0000' }}
-          >
-            Buckeye Match
-          </Link>
-        </div>
-      </header>
+      <AppHeader
+        title={otherName || 'Messages'}
+        showBack
+        onBack={() => navigate(isStudent ? '/dashboard/student' : '/dashboard/alumni')}
+        maxWidthClassName="max-w-2xl"
+      />
 
       {/* ── Message thread ── */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 flex flex-col">

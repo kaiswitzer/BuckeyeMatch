@@ -6,6 +6,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
+import AppHeader from '../components/AppHeader'
 
 export default function Landing() {
   const { user } = useAuth()
@@ -25,26 +26,19 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
 
-      {/* Header */}
-      <header className="bg-scarlet px-8 py-5 flex items-center justify-between"
-        style={{ backgroundColor: '#BB0000' }}>
-        <div>
+      <AppHeader
+        title=""
+        variant="scarlet"
+        maxWidthClassName="max-w-4xl"
+        right={(
           <Link
-            to="/"
-            state={{ allowLanding: true }}
-            className="inline-block text-white text-2xl font-bold tracking-tight hover:opacity-90 transition-opacity"
+            to="/login"
+            className="text-white border border-white px-4 py-2 rounded-lg text-sm hover:bg-white hover:text-red-700 transition"
           >
-            Buckeye Match
+            Log in
           </Link>
-          <p className="text-red-200 text-sm">Fisher College of Business</p>
-        </div>
-        <Link
-          to="/login"
-          className="text-white border border-white px-4 py-2 rounded-lg text-sm hover:bg-white hover:text-red-700 transition"
-        >
-          Log in
-        </Link>
-      </header>
+        )}
+      />
 
       {/* Hero */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 text-center">

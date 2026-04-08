@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
+import AppHeader from '../components/AppHeader'
 
 const SURVEY_QUESTIONS = [
   { key: 'work_style',          label: 'How do you prefer to work?',                       options: ['Independently', 'Collaboratively', 'Mix of both'] },
@@ -172,19 +173,12 @@ export default function StudentProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      {/* ── Nav ── */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button
-            onClick={() => navigate('/dashboard/student')}
-            className="text-gray-400 hover:text-gray-700 transition-colors text-lg"
-          >←</button>
-          <span className="font-bold text-base tracking-tight" style={{ color: '#BB0000' }}>
-            Edit Profile
-          </span>
-        </div>
-      </header>
+      <AppHeader
+        title="Edit Profile"
+        showBack
+        onBack={() => navigate('/dashboard/student')}
+        maxWidthClassName="max-w-2xl"
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
 

@@ -10,6 +10,7 @@ from flask import Flask
 from flask_cors import CORS
 from config import Config
 from models import db
+from sqlalchemy import inspect, text
 
 def create_app():
     app = Flask(__name__)
@@ -39,6 +40,18 @@ def create_app():
         # Safe to run every time — won't overwrite existing data.
         db.create_all()
 
+        # Lightweight migration for v1 admin flag.
+        # SQLAlchemy won't add columns automatically; this keeps existing DBs working.
+        try:
+            insp = inspect(db.engine)
+            cols = {c['name'] for c in insp.get_columns('users')}
+            if 'is_admin' not in cols:
+                db.session.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0'))
+                db.session.commit()
+        except Exception:
+            # If this fails (e.g., permissions), the app can still run; admin features will require migration.
+            db.session.rollback()
+
         # Register route blueprints — we'll add more as we build each feature
         from routes.auth import auth_bp
         app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -50,6 +63,9 @@ def create_app():
         app.register_blueprint(messages_bp, url_prefix='/api/messages')
         from routes.milestones import milestones_bp
         app.register_blueprint(milestones_bp, url_prefix='/api/milestones')
+
+        from routes.admin import admin_bp
+        app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     return app
 

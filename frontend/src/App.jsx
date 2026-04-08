@@ -22,6 +22,7 @@ import StudentProfile from './pages/StudentProfile'
 import AlumniProfile from './pages/AlumniProfile'
 import StudentProfileView from './pages/StudentProfileView'
 import AlumniProfileView from './pages/AlumniProfileView'
+import Admin from './pages/Admin'
 
 // ProtectedRoute wraps any page that requires login.
 // If the user isn't logged in, it redirects to /login.
@@ -35,6 +36,14 @@ function ProtectedRoute({ children, accountType }) {
     return <Navigate to="/" replace />
   }
 
+  return children
+}
+
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.is_admin) return <Navigate to="/" replace />
   return children
 }
 
@@ -88,6 +97,10 @@ function AppRoutes() {
       } />
       <Route path="/profile/alumni" element={
         <ProtectedRoute accountType="alumni"><AlumniProfile /></ProtectedRoute>
+      } />
+
+      <Route path="/admin" element={
+        <AdminRoute><Admin /></AdminRoute>
       } />
       
       {/* Catch-all — redirect unknown URLs to home */}
