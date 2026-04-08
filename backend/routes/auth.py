@@ -94,7 +94,8 @@ def signup():
         email=email,
         password_hash=hashed_password,
         account_type=account_type,
-        is_verified=False
+        # TODO: change to False when email verification is implemented
+        is_verified=True
     )
     db.session.add(new_user)
     db.session.commit()
@@ -173,8 +174,9 @@ def login():
         return jsonify({'error': 'Invalid email or password'}), 401
 
     # Block unverified users from logging in
-    if not user.is_verified:
-        return jsonify({'error': 'Please verify your OSU email before logging in'}), 403
+    # TODO: change to True when email verification is implemented
+    #if not user.is_verified:
+       #return jsonify({'error': 'Please verify your OSU email before logging in'}), 403
 
     # Generate a 7-day auth token
     auth_token = generate_token(user.id, purpose='auth', expires_in_hours=168)
