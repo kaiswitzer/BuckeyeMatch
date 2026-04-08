@@ -45,6 +45,7 @@ export default function AlumniProfile() {
   const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   // Section 1 — basic info + history
   const [basic, setBasic] = useState({
@@ -70,6 +71,7 @@ export default function AlumniProfile() {
 
   useEffect(() => {
     async function fetchProfile() {
+      setLoadError('')
       try {
         const res = await api.get('/profiles/alumni/me')
         const p = res.data
@@ -89,13 +91,21 @@ export default function AlumniProfile() {
             role:    h.role_name    ?? '',
             years:   h.start_year ? String(h.start_year) : ''
           })))
+        } else {
+          setHistory([{ company: '', role: '', years: '' }])
         }
 
         setAvailability(p.availability ?? 'open')
-        setShowHelpedCount(p.show_helped_count ?? true)
-        setHelpedCount(p.helped_count ?? 0)
+        setShowHelpedCount(p.show_helped_count !== false)
+        setHelpedCount(typeof p.helped_count === 'number' ? p.helped_count : 0)
       } catch (err) {
         console.error('Failed to load profile:', err)
+        const status = err.response?.status
+        if (status === 404) {
+          setLoadError('')
+        } else {
+          setLoadError(err.response?.data?.error || 'Could not load your profile. Try refreshing the page.')
+        }
       } finally {
         setLoading(false)
       }
@@ -113,7 +123,25 @@ export default function AlumniProfile() {
         role_name:    h.role,
         start_year:   h.years ? parseInt(h.years) : null,
       }))
-      await api.post('/profiles/alumni', { ...basic, history: filledHistory })
+      const res = await api.post('/profiles/alumni', { ...basic, history: filledHistory })
+      const p = res.data?.profile
+      if (p) {
+        setBasic({
+          first_name:      p.first_name      ?? '',
+          last_name:       p.last_name       ?? '',
+          current_company: p.current_company ?? '',
+          current_role:    p.current_role    ?? '',
+          career_summary:  p.career_summary  ?? '',
+          bio:             p.bio             ?? '',
+        })
+        if (p.history && p.history.length > 0) {
+          setHistory(p.history.map(h => ({
+            company: h.company_name ?? '',
+            role:    h.role_name    ?? '',
+            years:   h.start_year ? String(h.start_year) : ''
+          })))
+        }
+      }
       setSavedBasic(true)
       setTimeout(() => setSavedBasic(false), 2000)
     } catch (err) {
@@ -182,6 +210,12 @@ export default function AlumniProfile() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 flex flex-col gap-6">
+
+        {loadError && (
+          <div className="bg-red-50 border border-red-100 text-red-700 text-sm px-4 py-3 rounded-xl">
+            {loadError}
+          </div>
+        )}
 
         {/* ── Section 1: Basic Info + History ── */}
         <Section

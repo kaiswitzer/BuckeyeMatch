@@ -242,13 +242,6 @@ export default function AlumniDashboard() {
           </Link>
           <div className="flex items-center gap-4">
             <button
-              type="button"
-              onClick={() => navigate('/profile/alumni')}
-              className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              Edit profile
-            </button>
-            <button
               onClick={() => navigate('/profile/alumni')}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
             >

@@ -226,6 +226,22 @@ def get_student_profile():
 
 # ─── ALUMNI ROUTES ───────────────────────────────────────────────────────────
 
+@profiles_bp.route('/alumni/me', methods=['GET'])
+def get_alumni_profile():
+    """Returns the full alumni profile for the logged-in user (same shape as AlumniProfile.to_dict)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if user.account_type != 'alumni':
+        return jsonify({'error': 'Only alumni can view this profile'}), 403
+
+    profile = AlumniProfile.query.filter_by(user_id=user.id).first()
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify(profile.to_dict()), 200
+
+
 @profiles_bp.route('/alumni', methods=['POST'])
 def create_alumni_profile():
     """
@@ -257,6 +273,7 @@ def create_alumni_profile():
         existing.current_company = data['current_company']
         existing.current_role = data['current_role']
         existing.career_summary = data.get('career_summary')
+        existing.bio = data.get('bio')
 
         # Replace history
         AlumniHistory.query.filter_by(alumni_id=existing.id).delete()
@@ -281,7 +298,8 @@ def create_alumni_profile():
         last_name=data['last_name'],
         current_company=data['current_company'],
         current_role=data['current_role'],
-        career_summary=data.get('career_summary')
+        career_summary=data.get('career_summary'),
+        bio=data.get('bio')
     )
     db.session.add(profile)
     db.session.flush()  # flush to get profile.id before inserting history rows
