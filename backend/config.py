@@ -16,7 +16,11 @@ class Config:
     # SQLAlchemy database connection string
     # sqlite:///buckeye_match.db creates a file called buckeye_match.db
     # inside the backend folder when the app first runs
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///buckeye_match.db')
+    _database_url = os.environ.get('DATABASE_URL', 'sqlite:///buckeye_match.db')
+    # Some providers still supply postgres:// URLs; SQLAlchemy expects postgresql://
+    if _database_url.startswith('postgres://'):
+        _database_url = _database_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = _database_url
 
     # Disables a SQLAlchemy feature we don't need (saves memory)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
