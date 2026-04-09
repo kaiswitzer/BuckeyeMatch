@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS matches (
     alumni_id INTEGER NOT NULL,
     score REAL NOT NULL,           -- matching engine score (0.0 to 1.0)
     explanation TEXT NOT NULL,     -- plain-English reason shown to student
-    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'passed')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'active', 'passed')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES student_profiles(id),
     FOREIGN KEY (alumni_id) REFERENCES alumni_profiles(id)

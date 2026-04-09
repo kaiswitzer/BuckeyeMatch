@@ -67,7 +67,19 @@ def list_users():
         query = query.filter(func.lower(User.email).contains(q))
 
     users = query.order_by(User.id.desc()).limit(200).all()
-    return jsonify({'users': [u.to_dict() for u in users]}), 200
+
+    payload = []
+    for u in users:
+        d = u.to_dict()
+        if u.account_type == 'student':
+            sp = StudentProfile.query.filter_by(user_id=u.id).first()
+            d['profile_id'] = sp.id if sp else None
+        else:
+            ap = AlumniProfile.query.filter_by(user_id=u.id).first()
+            d['profile_id'] = ap.id if ap else None
+        payload.append(d)
+
+    return jsonify({'users': payload}), 200
 
 
 @admin_bp.route('/users', methods=['POST'])
@@ -120,6 +132,26 @@ def patch_user(user_id):
 
     db.session.commit()
     return jsonify({'message': 'User updated', 'user': target.to_dict()}), 200
+
+
+@admin_bp.route('/users/<int:user_id>/password', methods=['PATCH'])
+def admin_set_user_password(user_id):
+    user, err = require_admin()
+    if err:
+        return err
+
+    target = User.query.get(user_id)
+    if not target:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.get_json() or {}
+    password = data.get('password') or ''
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    target.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+    db.session.commit()
+    return jsonify({'message': 'Password updated'}), 200
 
 
 @admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
@@ -549,7 +581,56 @@ def list_milestones():
                 return jsonify({'milestones': []}), 200
             query = query.filter(Milestone.match_id.in_(match_ids))
     miles = query.order_by(Milestone.logged_at.desc()).limit(300).all()
-    return jsonify({'milestones': [m.to_dict() for m in miles]}), 200
+
+    # Enrich with human-friendly identity (student/alumni + user)
+    student_profile_ids = list({m.student_id for m in miles if m.student_id is not None})
+    match_ids = list({m.match_id for m in miles if m.match_id is not None})
+
+    students_by_id = {}
+    if student_profile_ids:
+        for sp in StudentProfile.query.filter(StudentProfile.id.in_(student_profile_ids)).all():
+            students_by_id[sp.id] = sp
+
+    matches_by_id = {}
+    alumni_by_id = {}
+    if match_ids:
+        for mt in Match.query.filter(Match.id.in_(match_ids)).all():
+            matches_by_id[mt.id] = mt
+        alumni_profile_ids = list({mt.alumni_id for mt in matches_by_id.values() if mt.alumni_id is not None})
+        if alumni_profile_ids:
+            for ap in AlumniProfile.query.filter(AlumniProfile.id.in_(alumni_profile_ids)).all():
+                alumni_by_id[ap.id] = ap
+
+    user_ids = set()
+    for sp in students_by_id.values():
+        user_ids.add(sp.user_id)
+    for ap in alumni_by_id.values():
+        user_ids.add(ap.user_id)
+
+    users_by_id = {}
+    if user_ids:
+        for u in User.query.filter(User.id.in_(list(user_ids))).all():
+            users_by_id[u.id] = u
+
+    payload = []
+    for m in miles:
+        sp = students_by_id.get(m.student_id)
+        student_user = users_by_id.get(sp.user_id) if sp else None
+
+        mt = matches_by_id.get(m.match_id) if m.match_id else None
+        ap = alumni_by_id.get(mt.alumni_id) if mt else None
+        alumni_user = users_by_id.get(ap.user_id) if ap else None
+
+        payload.append({
+            'milestone': m.to_dict(),
+            'student_profile': sp.to_dict() if sp else None,
+            'student_user': student_user.to_dict() if student_user else None,
+            'match': mt.to_dict() if mt else None,
+            'alumni_profile': ap.to_dict() if ap else None,
+            'alumni_user': alumni_user.to_dict() if alumni_user else None,
+        })
+
+    return jsonify({'milestones': payload}), 200
 
 
 @admin_bp.route('/milestones/<int:milestone_id>', methods=['DELETE'])

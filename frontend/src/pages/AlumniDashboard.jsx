@@ -34,7 +34,9 @@ function MatchCard({ match, student, onRespond }) {
   // Determine current display state — prefer localStatus (optimistic) over DB status
   const effectiveStatus = localStatus ?? match.status
   const isPassed   = effectiveStatus === 'passed'
-  const isAccepted = effectiveStatus === 'accepted'
+  // 'active' means the match has message activity; it should still be treated
+  // as already-accepted for dashboard actions (no accept/pass re-prompt).
+  const isAccepted = effectiveStatus === 'accepted' || effectiveStatus === 'active'
 
   const handleRespond = async (action) => {
     setError('')

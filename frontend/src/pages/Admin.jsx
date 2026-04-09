@@ -56,6 +56,15 @@ function AdminMessageBubble({ body, sentAt, align, senderLabel }) {
   )
 }
 
+function formatUserLabel({ first_name, last_name, email, id, profile_id, account_type }) {
+  const name = (first_name && last_name) ? `${first_name} ${last_name}` : (email || 'Unknown')
+  const profLabel = profile_id != null
+    ? `${account_type === 'alumni' ? 'alumni_profile' : 'student_profile'} ${profile_id}`
+    : 'profile —'
+  const userLabel = id != null ? `user ${id}` : 'user —'
+  return `${name} (${userLabel}, ${profLabel})`
+}
+
 function TabButton({ active, onClick, children }) {
   return (
     <button
@@ -95,6 +104,10 @@ export default function Admin() {
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [newUser, setNewUser] = useState({ email: '', password: '', account_type: 'student', is_admin: false })
   const [creatingUser, setCreatingUser] = useState(false)
+  const [pwUserId, setPwUserId] = useState(null)
+  const [pwForm, setPwForm] = useState({ password: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwError, setPwError] = useState('')
 
   // Profiles
   const [selectedUserId, setSelectedUserId] = useState(null)
@@ -133,7 +146,7 @@ export default function Admin() {
   // Wins / milestones
   const [winsUserId, setWinsUserId] = useState(null)
   const [winsLoading, setWinsLoading] = useState(false)
-  const [milestones, setMilestones] = useState([])
+  const [milestones, setMilestones] = useState([]) // enriched items from /admin/milestones
   const [winsMatchesLoading, setWinsMatchesLoading] = useState(false)
   const [winsMatches, setWinsMatches] = useState([])
 
@@ -383,6 +396,40 @@ export default function Admin() {
     }
   }
 
+  const openPasswordReset = (u) => {
+    setPwError('')
+    setPwUserId(u.id)
+    setPwForm({ password: '', confirm: '' })
+  }
+
+  const cancelPasswordReset = () => {
+    setPwError('')
+    setPwUserId(null)
+    setPwForm({ password: '', confirm: '' })
+  }
+
+  const savePasswordReset = async () => {
+    if (!pwUserId) return
+    setPwError('')
+    if (pwForm.password !== pwForm.confirm) {
+      setPwError('Passwords do not match.')
+      return
+    }
+    if ((pwForm.password || '').length < 8) {
+      setPwError('Password must be at least 8 characters.')
+      return
+    }
+    setPwSaving(true)
+    try {
+      await api.patch(`/admin/users/${pwUserId}/password`, { password: pwForm.password })
+      cancelPasswordReset()
+    } catch (err) {
+      setPwError(err.response?.data?.error || 'Could not update password.')
+    } finally {
+      setPwSaving(false)
+    }
+  }
+
   const deleteUser = async (u) => {
     if (!window.confirm(`Delete user ${u.email}? This removes their profile and matches.`)) return
     setError('')
@@ -525,11 +572,14 @@ export default function Admin() {
               </div>
               <div className="space-y-2">
                 {users.map(u => (
-                  <div key={u.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50">
+                  <div key={u.id} className="px-4 py-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{u.email}</p>
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {formatUserLabel(u)}
+                      </p>
                       <p className="text-xs text-gray-500">
-                        id {u.id} · {u.account_type} · verified {String(u.is_verified)} · admin {String(u.is_admin)}
+                        verified {String(u.is_verified)} · admin {String(u.is_admin)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -564,12 +614,63 @@ export default function Admin() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => openPasswordReset(u)}
+                        className="text-xs font-medium text-gray-600 hover:text-gray-900"
+                      >
+                        Reset password
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => deleteUser(u)}
                         className="text-xs font-medium text-red-600 hover:text-red-800"
                       >
                         Delete
                       </button>
                     </div>
+                    </div>
+
+                    {pwUserId === u.id && (
+                      <div className="mt-3 bg-white border border-gray-100 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-gray-900">Set new password</p>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <input
+                            className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
+                            placeholder="New password (min 8)"
+                            value={pwForm.password}
+                            onChange={(e) => setPwForm({ ...pwForm, password: e.target.value })}
+                          />
+                          <input
+                            className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
+                            placeholder="Confirm password"
+                            value={pwForm.confirm}
+                            onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })}
+                          />
+                        </div>
+                        {pwError && (
+                          <div className="mt-3 text-sm text-red-600">
+                            {pwError}
+                          </div>
+                        )}
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelPasswordReset}
+                            className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={savePasswordReset}
+                            disabled={pwSaving}
+                            className="px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                            style={{ backgroundColor: '#BB0000' }}
+                          >
+                            {pwSaving ? 'Saving…' : 'Save'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -593,7 +694,7 @@ export default function Admin() {
                   <option value="">Choose a user…</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.email} (id {u.id})
+                      {formatUserLabel(u)}
                     </option>
                   ))}
                 </select>
@@ -830,20 +931,20 @@ export default function Admin() {
                       <p className="text-sm font-semibold text-gray-900 mb-2">History</p>
                       <div className="space-y-2">
                         {alumniHistory.map((h, i) => (
-                          <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-start">
+                          <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
                             <input
-                              className="sm:col-span-2 border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
+                              className="sm:col-span-4 border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
                               placeholder="Company"
                               value={h.company_name}
                               onChange={(e) => setAlumniHistory(alumniHistory.map((x, idx) => idx === i ? { ...x, company_name: e.target.value } : x))}
                             />
                             <input
-                              className="sm:col-span-2 border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
+                              className="sm:col-span-4 border border-gray-200 rounded-lg px-4 py-2.5 text-sm"
                               placeholder="Role"
                               value={h.role_name}
                               onChange={(e) => setAlumniHistory(alumniHistory.map((x, idx) => idx === i ? { ...x, role_name: e.target.value } : x))}
                             />
-                            <div className="flex gap-2">
+                            <div className="sm:col-span-4 flex flex-wrap gap-2 justify-start sm:justify-end">
                               <input
                                 className="w-24 border border-gray-200 rounded-lg px-3 py-2.5 text-sm"
                                 placeholder="Start"
@@ -859,7 +960,7 @@ export default function Admin() {
                               <button
                                 type="button"
                                 onClick={() => setAlumniHistory(alumniHistory.filter((_, idx) => idx !== i))}
-                                className="text-xs font-medium text-gray-500 hover:text-red-700 px-2"
+                                className="text-xs font-medium text-gray-500 hover:text-red-700 px-2 py-2.5"
                               >
                                 Remove
                               </button>
@@ -948,7 +1049,7 @@ export default function Admin() {
                   <option value="">Choose a user…</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.email} (id {u.id})
+                      {formatUserLabel(u)}
                     </option>
                   ))}
                 </select>
@@ -1063,7 +1164,7 @@ export default function Admin() {
                         <option value="">All users</option>
                         {users.map(u => (
                           <option key={u.id} value={u.id}>
-                            {u.email} (id {u.id})
+                            {formatUserLabel(u)}
                           </option>
                         ))}
                       </select>
@@ -1118,11 +1219,35 @@ export default function Admin() {
                 ) : milestones.length === 0 ? (
                   <p className="text-sm text-gray-400">No wins found.</p>
                 ) : (
-                  milestones.map(m => (
+                  milestones.map(item => {
+                    const m = item.milestone
+                    const studentUser = item.student_user
+                    const studentProfile = item.student_profile
+                    const alumniUser = item.alumni_user
+                    const alumniProfile = item.alumni_profile
+
+                    const studentLabel = studentUser
+                      ? formatUserLabel({
+                        ...studentUser,
+                        account_type: 'student',
+                        profile_id: studentProfile?.id ?? null,
+                      })
+                      : (studentProfile?.id != null ? `student_profile ${studentProfile.id}` : 'student —')
+
+                    const alumniLabel = alumniUser
+                      ? formatUserLabel({
+                        ...alumniUser,
+                        account_type: 'alumni',
+                        profile_id: alumniProfile?.id ?? null,
+                      })
+                      : (alumniProfile?.id != null ? `alumni_profile ${alumniProfile.id}` : null)
+
+                    return (
                     <div key={m.id} className="px-4 py-3 rounded-xl border border-gray-100 bg-gray-50">
                       <p className="text-sm font-medium text-gray-900">
-                        {m.outcome_type} · student_profile {m.student_id}
+                        {m.outcome_type} · {studentLabel}
                         {m.match_id ? ` · match ${m.match_id}` : ''}
+                        {alumniLabel ? ` · credited_to ${alumniLabel}` : ''}
                       </p>
                       {m.notes && (
                         <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{m.notes}</p>
@@ -1131,7 +1256,8 @@ export default function Admin() {
                         {m.logged_at ? new Date(m.logged_at).toLocaleString() : ''}
                       </p>
                     </div>
-                  ))
+                    )
+                  })}
                 )}
               </div>
             </Section>
