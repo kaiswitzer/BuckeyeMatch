@@ -1257,7 +1257,7 @@ export default function Admin() {
                       </p>
                     </div>
                     )
-                  })}
+                  })
                 )}
               </div>
             </Section>
