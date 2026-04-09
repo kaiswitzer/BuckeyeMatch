@@ -22,7 +22,7 @@ def create_app():
     # Without this, the browser blocks cross-origin requests — like a firewall rule.
     CORS(app, resources={r"/api/*": {"origins": [
     "http://localhost:5173", 
-    "https://buckeyematch-frontend.onrender.com"
+    "https://buckeyematch.onrender.com"
 ]}})
 
     # Connect SQLAlchemy to the app and create all tables if they don't exist.
@@ -46,7 +46,7 @@ def create_app():
             insp = inspect(db.engine)
             cols = {c['name'] for c in insp.get_columns('users')}
             if 'is_admin' not in cols:
-                db.session.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0'))
+                db.session.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE'))
                 db.session.commit()
         except Exception:
             # If this fails (e.g., permissions), the app can still run; admin features will require migration.
@@ -70,8 +70,9 @@ def create_app():
     return app
 
 
-# This block only runs when you execute app.py directly (python app.py).
-# It won't run if another file imports create_app — same as Java's main() pattern.
+# Create the app instance at the top level so Gunicorn can find it
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
+    # This block still allows you to run locally with 'python app.py'
     app.run(debug=True, port=5001)
