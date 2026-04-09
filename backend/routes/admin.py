@@ -446,7 +446,20 @@ def list_messages():
         return jsonify({'error': 'match_id is required'}), 400
 
     msgs = Message.query.filter_by(match_id=int(match_id)).order_by(Message.sent_at.asc()).all()
-    return jsonify({'messages': [m.to_dict() for m in msgs]}), 200
+    sender_ids = list({m.sender_id for m in msgs})
+    senders = {}
+    if sender_ids:
+        for u in User.query.filter(User.id.in_(sender_ids)).all():
+            senders[u.id] = u.to_dict()
+
+    return jsonify({
+        'messages': [
+            {
+                'message': m.to_dict(),
+                'sender': senders.get(m.sender_id),
+            } for m in msgs
+        ]
+    }), 200
 
 
 @admin_bp.route('/messages/search', methods=['GET'])

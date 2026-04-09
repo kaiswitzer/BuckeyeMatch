@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api/axios'
 import AppHeader from '../components/AppHeader'
+import { useAuth } from '../context/AuthContext'
 
 const SURVEY_QUESTIONS = [
   { key: 'work_style',          label: 'How do you prefer to work?',                       options: ['Independently', 'Collaboratively', 'Mix of both'] },
@@ -14,6 +16,45 @@ const SURVEY_QUESTIONS = [
   { key: 'networking_comfort',  label: 'How comfortable are you with networking?',         options: ['Very comfortable', 'Somewhat comfortable', 'Uncomfortable but trying', 'Very uncomfortable'] },
   { key: 'career_goal',         label: 'What is your long-term career goal?',              options: ['Corporate executive', 'Entrepreneur', 'Expert / specialist', 'Work-life balance focused'] },
 ]
+
+function formatMessageTime(isoString) {
+  const date = new Date(isoString)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ' · ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function AdminMessageBubble({ body, sentAt, align, senderLabel }) {
+  const isRight = align === 'right'
+  return (
+    <div className={`flex ${isRight ? 'justify-end' : 'justify-start'}`}>
+      <div className="max-w-xs sm:max-w-sm lg:max-w-md">
+        {senderLabel && (
+          <p className={`text-xs text-gray-500 mb-1 ${isRight ? 'text-right' : 'text-left'}`}>
+            {senderLabel}
+          </p>
+        )}
+        <div
+          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+            isRight
+              ? 'text-white rounded-br-sm'
+              : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+          }`}
+          style={isRight ? { backgroundColor: '#BB0000' } : {}}
+        >
+          {body}
+        </div>
+        <p className={`text-xs text-gray-400 mt-1 ${isRight ? 'text-right' : 'text-left'}`}>
+          {formatMessageTime(sentAt)}
+        </p>
+      </div>
+    </div>
+  )
+}
 
 function TabButton({ active, onClick, children }) {
   return (
@@ -42,6 +83,9 @@ function Section({ title, children }) {
 }
 
 export default function Admin() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
   const [tab, setTab] = useState('users') // users | profiles | messages | wins | matches | matching
   const [error, setError] = useState('')
 
@@ -78,7 +122,9 @@ export default function Admin() {
   const [threads, setThreads] = useState([])
   const [selectedMatchId, setSelectedMatchId] = useState(null)
   const [threadLoading, setThreadLoading] = useState(false)
+  // [{ message: Message.to_dict, sender: User.to_dict|null }]
   const [threadMessages, setThreadMessages] = useState([])
+  const [threadLeftSenderId, setThreadLeftSenderId] = useState(null)
 
   const [messageSearchQ, setMessageSearchQ] = useState('')
   const [messageSearching, setMessageSearching] = useState(false)
@@ -201,6 +247,7 @@ export default function Admin() {
     setThreadsLoading(true)
     setSelectedMatchId(null)
     setThreadMessages([])
+    setThreadLeftSenderId(null)
     try {
       const res = await api.get(`/admin/users/${userId}/matches`)
       setThreads(res.data.matches ?? [])
@@ -218,7 +265,10 @@ export default function Admin() {
     setThreadLoading(true)
     try {
       const res = await api.get('/admin/messages', { params: { match_id: matchId } })
-      setThreadMessages(res.data.messages ?? [])
+      const items = res.data.messages ?? []
+      setThreadMessages(items)
+      const firstSenderId = items?.[0]?.message?.sender_id ?? null
+      setThreadLeftSenderId(firstSenderId)
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load messages.')
     } finally {
@@ -377,6 +427,16 @@ export default function Admin() {
         title="Admin"
         right={(
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const dest = user?.account_type === 'alumni' ? '/dashboard/alumni' : '/dashboard/student'
+                navigate(dest)
+              }}
+              className="text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+            >
+              Dashboard
+            </button>
             <TabButton active={tab === 'users'} onClick={() => setTab('users')}>Users</TabButton>
             <TabButton active={tab === 'profiles'} onClick={() => setTab('profiles')}>Profiles</TabButton>
             <TabButton active={tab === 'messages'} onClick={() => setTab('messages')}>Messages</TabButton>
@@ -940,15 +1000,27 @@ export default function Admin() {
                   {threadLoading ? (
                     <p className="text-sm text-gray-400">Loading…</p>
                   ) : (
-                    <div className="space-y-2">
-                      {threadMessages.map(m => (
-                        <div key={m.id} className="px-4 py-3 rounded-xl border border-gray-100 bg-white">
-                          <p className="text-xs text-gray-500">
-                            sender {m.sender_id} · {new Date(m.sent_at).toLocaleString()}
-                          </p>
-                          <p className="text-sm text-gray-900 whitespace-pre-wrap">{m.body}</p>
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      {threadMessages.map(item => {
+                        const msg = item.message
+                        const sender = item.sender
+                        const senderName = sender?.first_name && sender?.last_name
+                          ? `${sender.first_name} ${sender.last_name}`
+                          : (sender?.email || (msg?.sender_id != null ? `User ${msg.sender_id}` : 'Unknown'))
+
+                        const leftId = threadLeftSenderId
+                        const align = leftId != null && String(msg?.sender_id) === String(leftId) ? 'left' : 'right'
+
+                        return (
+                          <AdminMessageBubble
+                            key={msg?.id}
+                            body={msg?.body}
+                            sentAt={msg?.sent_at}
+                            align={align}
+                            senderLabel={senderName}
+                          />
+                        )
+                      })}
                       {threadMessages.length === 0 && (
                         <p className="text-sm text-gray-400">Select a thread to view messages.</p>
                       )}
