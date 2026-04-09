@@ -5,7 +5,16 @@
 
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import api from '../api/axios'
+import api, { getApiBaseURL } from '../api/axios'
+
+/** POST /api/auth/signup — use full URL in production (VITE_API_URL) so the path is never ambiguous. */
+function signupPostURL() {
+  const base = getApiBaseURL().replace(/\/$/, '')
+  if (base.startsWith('http')) {
+    return `${base}/auth/signup`
+  }
+  return '/auth/signup'
+}
 import AppHeader from '../components/AppHeader'
 
 export default function Signup() {
@@ -38,7 +47,7 @@ export default function Signup() {
     setLoading(true)
 
     try {
-      await api.post('/auth/signup', {
+      await api.post(signupPostURL(), {
         email: form.email.trim().toLowerCase(),
         password: form.password,
         account_type: form.account_type,
