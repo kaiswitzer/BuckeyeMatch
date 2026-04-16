@@ -2,7 +2,7 @@
 // Student dashboard — shows match cards and lets the student log milestones.
 // Alumni name and avatar are now clickable — navigate to alumni profile view.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
@@ -423,11 +423,28 @@ export default function StudentDashboard() {
   const [runMatchingLoading, setRunMatchingLoading] = useState(false)
   const [matchRunMessage, setMatchRunMessage]       = useState('')
   const [headerName, setHeaderName] = useState('')
+  const [msgSummary, setMsgSummary] = useState({
+    total_unread: 0,
+    pending_pairing_requests: 0,
+  })
+
+  const fetchMessageSummary = useCallback(async () => {
+    try {
+      const res = await api.get('/messages/unread-summary')
+      setMsgSummary({
+        total_unread: res.data.total_unread ?? 0,
+        pending_pairing_requests: res.data.pending_pairing_requests ?? 0,
+      })
+    } catch (err) {
+      console.error('Failed to load message summary:', err)
+    }
+  }, [])
 
   const fetchMatches = async () => {
     try {
       const res = await api.get('/matches/mine')
       setMatches(res.data.matches ?? [])
+      await fetchMessageSummary()
     } catch (err) {
       console.error('Failed to load matches:', err)
       setError('Something went wrong loading your matches. Try refreshing.')
@@ -439,6 +456,14 @@ export default function StudentDashboard() {
   useEffect(() => {
     fetchMatches()
   }, [])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchMessageSummary()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchMessageSummary])
 
   useEffect(() => {
     async function fetchHeaderName() {
@@ -493,6 +518,30 @@ export default function StudentDashboard() {
                 Admin
               </Link>
             )}
+            <div className="flex items-center gap-1.5">
+              <Link
+                to="/messages"
+                className="relative text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+                style={{ borderColor: '#BB0000', color: '#BB0000' }}
+              >
+                Messages
+                {msgSummary.total_unread > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                    style={{ backgroundColor: '#BB0000' }}
+                  >
+                    {msgSummary.total_unread > 99 ? '99+' : msgSummary.total_unread}
+                  </span>
+                )}
+              </Link>
+              {msgSummary.pending_pairing_requests > 0 && (
+                <span
+                  className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"
+                  title="Waiting for an alum to accept your match"
+                  aria-hidden
+                />
+              )}
+            </div>
             <button
               onClick={() => setShowMilestone(true)}
               className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"

@@ -174,7 +174,7 @@ export default function Messages() {
       <AppHeader
         title={otherName || 'Messages'}
         showBack
-        onBack={() => navigate(isStudent ? '/dashboard/student' : '/dashboard/alumni')}
+        onBack={() => navigate('/messages')}
         maxWidthClassName="max-w-2xl"
       />
 

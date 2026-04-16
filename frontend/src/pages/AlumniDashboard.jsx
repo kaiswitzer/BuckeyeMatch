@@ -7,7 +7,7 @@
 //   - Shows alumni_explanation instead of the student-facing explanation
 //   - Student name/avatar is clickable — navigates to their profile view
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
@@ -204,12 +204,29 @@ export default function AlumniDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [headerName, setHeaderName] = useState('')
+  const [msgSummary, setMsgSummary] = useState({
+    total_unread: 0,
+    pending_pairing_requests: 0,
+  })
+
+  const fetchMessageSummary = useCallback(async () => {
+    try {
+      const res = await api.get('/messages/unread-summary')
+      setMsgSummary({
+        total_unread: res.data.total_unread ?? 0,
+        pending_pairing_requests: res.data.pending_pairing_requests ?? 0,
+      })
+    } catch (err) {
+      console.error('Failed to load message summary:', err)
+    }
+  }, [])
 
   useEffect(() => {
     async function fetchMatches() {
       try {
         const res = await api.get('/matches/mine')
         setMatches(res.data.matches ?? [])
+        await fetchMessageSummary()
       } catch (err) {
         console.error('Failed to load matches:', err)
         setError('Something went wrong loading your matches. Try refreshing.')
@@ -218,7 +235,15 @@ export default function AlumniDashboard() {
       }
     }
     fetchMatches()
-  }, [])
+  }, [fetchMessageSummary])
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchMessageSummary()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [fetchMessageSummary])
 
   useEffect(() => {
     async function fetchHeaderName() {
@@ -236,7 +261,7 @@ export default function AlumniDashboard() {
   }, [])
 
   const handleRespond = (matchId, newStatus) => {
-    // Could re-sort here in the future — for now cards update in place
+    fetchMessageSummary()
   }
 
   const handleLogout = () => {
@@ -263,6 +288,30 @@ export default function AlumniDashboard() {
                 Admin
               </Link>
             )}
+            <div className="flex items-center gap-1.5">
+              <Link
+                to="/messages"
+                className="relative text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+                style={{ borderColor: '#BB0000', color: '#BB0000' }}
+              >
+                Messages
+                {msgSummary.total_unread > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                    style={{ backgroundColor: '#BB0000' }}
+                  >
+                    {msgSummary.total_unread > 99 ? '99+' : msgSummary.total_unread}
+                  </span>
+                )}
+              </Link>
+              {msgSummary.pending_pairing_requests > 0 && (
+                <span
+                  className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"
+                  title="Students waiting for you to accept or pass"
+                  aria-hidden
+                />
+              )}
+            </div>
             <button
               onClick={() => navigate('/profile/alumni')}
               className="text-sm text-gray-500 hover:text-gray-800 transition-colors"

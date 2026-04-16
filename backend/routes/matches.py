@@ -8,11 +8,12 @@
 #   GET  /api/matches/<id>/alumni      — get the alumni profile for a match (student only)
 
 from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy import func
 from models import db
 from models.user import User
 from models.student import StudentProfile
 from models.alumni import AlumniProfile
-from models.match import Match
+from models.match import Match, Message
 from matching.engine import run_matching_for_student
 import jwt
 
@@ -87,6 +88,7 @@ def get_my_matches():
                 'match': m.to_dict(),
                 'alumni': alumni.to_dict() if alumni else None
             })
+        _attach_unread_counts(result, user)
         return jsonify({'matches': result}), 200
 
     else:  # alumni
@@ -102,7 +104,29 @@ def get_my_matches():
                 'match': m.to_dict(),
                 'student': student.to_dict() if student else None
             })
+        _attach_unread_counts(result, user)
         return jsonify({'matches': result}), 200
+
+
+def _attach_unread_counts(result, user):
+    """Adds unread_message_count per item based on messages not sent by user with read_at NULL."""
+    ids = [item['match']['id'] for item in result if item.get('match')]
+    if not ids:
+        return
+    rows = (
+        db.session.query(Message.match_id, func.count(Message.id))
+        .filter(
+            Message.match_id.in_(ids),
+            Message.read_at.is_(None),
+            Message.sender_id != user.id,
+        )
+        .group_by(Message.match_id)
+        .all()
+    )
+    count_map = {mid: c for mid, c in rows}
+    for item in result:
+        mid = item['match']['id']
+        item['unread_message_count'] = count_map.get(mid, 0)
 
 
 @matches_bp.route('/<int:match_id>/respond', methods=['POST'])

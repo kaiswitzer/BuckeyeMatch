@@ -18,6 +18,7 @@ import AlumniOnboarding from './pages/AlumniOnboarding'
 import StudentDashboard from './pages/StudentDashboard'
 import AlumniDashboard from './pages/AlumniDashboard'
 import Messages from './pages/Messages'
+import MessagesInbox from './pages/MessagesInbox'
 import StudentProfile from './pages/StudentProfile'
 import AlumniProfile from './pages/AlumniProfile'
 import StudentProfileView from './pages/StudentProfileView'
@@ -87,6 +88,11 @@ function AppRoutes() {
         <ProtectedRoute accountType="student"><AlumniProfileView /></ProtectedRoute>
       } />
       {/* Shared — both students and alumni can message */}
+      <Route path="/messages" element={
+        <ProtectedRoute>
+          <MessagesInbox />
+        </ProtectedRoute>
+      } />
       <Route path="/messages/:matchId" element={
         <ProtectedRoute>
           <Messages />
