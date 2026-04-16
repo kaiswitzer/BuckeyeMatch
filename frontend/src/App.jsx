@@ -50,9 +50,18 @@ function AdminRoute({ children }) {
   return children
 }
 
-function AppRoutes() {
-  const { user } = useAuth()
+/** Logged-in students, or admins (read-only peer tools). */
+function StudentOrAdminRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  if (!user) return <Navigate to="/login" replace />
+  if (user.account_type !== 'student' && !user.is_admin) {
+    return <Navigate to="/" replace />
+  }
+  return children
+}
 
+function AppRoutes() {
   return (
     <Routes>
       {/* Public routes */}
@@ -104,10 +113,10 @@ function AppRoutes() {
         <ProtectedRoute accountType="student"><StudentProfile /></ProtectedRoute>
       } />
       <Route path="/peers" element={
-        <ProtectedRoute accountType="student"><StudentPeers /></ProtectedRoute>
+        <StudentOrAdminRoute><StudentPeers /></StudentOrAdminRoute>
       } />
       <Route path="/peers/introductions/:introId" element={
-        <ProtectedRoute accountType="student"><PeerIntroduction /></ProtectedRoute>
+        <StudentOrAdminRoute><PeerIntroduction /></StudentOrAdminRoute>
       } />
       <Route path="/profile/alumni" element={
         <ProtectedRoute accountType="alumni"><AlumniProfile /></ProtectedRoute>

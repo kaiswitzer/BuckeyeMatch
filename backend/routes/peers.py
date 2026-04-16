@@ -7,7 +7,6 @@ from models import db
 from models.user import User
 from models.student import StudentProfile, StudentExperience
 from models.peer import PeerIntroRequest, PeerMessage
-from datetime import datetime
 import jwt
 
 peers_bp = Blueprint('peers', __name__)
@@ -27,10 +26,38 @@ def get_current_user():
         return None
 
 
-def require_student():
+def require_auth():
     user = get_current_user()
     if not user:
         return None, (jsonify({'error': 'Unauthorized'}), 401)
+    return user, None
+
+
+def require_student():
+    """Student with profile — required for creating intros and messaging. Admins are read-only."""
+    user, err = require_auth()
+    if err:
+        return None, err
+    if getattr(user, 'is_admin', False):
+        return None, (jsonify({'error': 'Admins cannot modify peer intros'}), 403)
+    if user.account_type != 'student':
+        return None, (jsonify({'error': 'Only students can use peer intros'}), 403)
+    profile = StudentProfile.query.filter_by(user_id=user.id).first()
+    if not profile:
+        return None, (jsonify({'error': 'Student profile required'}), 400)
+    return (user, profile), None
+
+
+def require_student_or_admin():
+    """
+    Authenticated student (with profile) or admin.
+    Admins get read-only access to peer discovery and intro threads; profile is None for admins.
+    """
+    user, err = require_auth()
+    if err:
+        return None, err
+    if getattr(user, 'is_admin', False):
+        return (user, None), None
     if user.account_type != 'student':
         return None, (jsonify({'error': 'Only students can use peer intros'}), 403)
     profile = StudentProfile.query.filter_by(user_id=user.id).first()
@@ -65,7 +92,7 @@ def recipient_has_visible_experience(recipient_student_id, company_norm):
 
 @peers_bp.route('/by-company', methods=['GET'])
 def peers_by_company():
-    pair, err = require_student()
+    pair, err = require_student_or_admin()
     if err:
         return err
     user, me = pair
@@ -76,14 +103,15 @@ def peers_by_company():
 
     company_norm = normalize_company(company)
 
-    rows = (
+    q = (
         db.session.query(StudentExperience, StudentProfile)
         .join(StudentProfile, StudentExperience.student_id == StudentProfile.id)
         .filter(StudentExperience.visible_to_peers.is_(True))
         .filter(func.lower(func.trim(StudentExperience.company_name)) == company_norm)
-        .filter(StudentProfile.id != me.id)
-        .all()
     )
+    if me is not None:
+        q = q.filter(StudentProfile.id != me.id)
+    rows = q.all()
 
     seen = set()
     peers = []
@@ -108,21 +136,10 @@ def peers_by_company():
 
 @peers_bp.route('/introductions', methods=['GET'])
 def list_introductions():
-    pair, err = require_student()
+    pair, err = require_student_or_admin()
     if err:
         return err
     user, me = pair
-
-    incoming = (
-        PeerIntroRequest.query.filter_by(recipient_student_id=me.id)
-        .order_by(PeerIntroRequest.created_at.desc())
-        .all()
-    )
-    outgoing = (
-        PeerIntroRequest.query.filter_by(requester_student_id=me.id)
-        .order_by(PeerIntroRequest.created_at.desc())
-        .all()
-    )
 
     def summarize(intro, perspective):
         other_sid = (
@@ -144,6 +161,54 @@ def list_introductions():
             },
             'preview': intro.initial_message[:120] + ('…' if len(intro.initial_message) > 120 else ''),
         }
+
+    if getattr(user, 'is_admin', False):
+        all_intros = PeerIntroRequest.query.order_by(PeerIntroRequest.created_at.desc()).all()
+
+        def summarize_admin(i):
+            req_p = StudentProfile.query.get(i.requester_student_id)
+            rec_p = StudentProfile.query.get(i.recipient_student_id)
+            rn = display_name_peer(req_p.first_name, req_p.last_name) if req_p else 'Unknown'
+            recn = display_name_peer(rec_p.first_name, rec_p.last_name) if rec_p else 'Unknown'
+            return {
+                'id': i.id,
+                'company_name': i.company_name,
+                'status': i.status,
+                'created_at': i.created_at.isoformat(),
+                'perspective': 'admin',
+                'requester_student': {
+                    'student_id': i.requester_student_id,
+                    'display_name': rn,
+                },
+                'recipient_student': {
+                    'student_id': i.recipient_student_id,
+                    'display_name': recn,
+                },
+                'other_student': {
+                    'student_id': i.requester_student_id,
+                    'display_name': f'{rn} → {recn}',
+                },
+                'preview': i.initial_message[:120] + ('…' if len(i.initial_message) > 120 else ''),
+            }
+
+        return jsonify(
+            {
+                'incoming': [],
+                'outgoing': [],
+                'all': [summarize_admin(x) for x in all_intros],
+            }
+        ), 200
+
+    incoming = (
+        PeerIntroRequest.query.filter_by(recipient_student_id=me.id)
+        .order_by(PeerIntroRequest.created_at.desc())
+        .all()
+    )
+    outgoing = (
+        PeerIntroRequest.query.filter_by(requester_student_id=me.id)
+        .order_by(PeerIntroRequest.created_at.desc())
+        .all()
+    )
 
     return jsonify(
         {
@@ -203,39 +268,7 @@ def create_introduction():
     return jsonify({'message': 'Intro request sent', 'introduction': intro.to_dict()}), 201
 
 
-@peers_bp.route('/introductions/<int:intro_id>', methods=['GET'])
-def get_introduction(intro_id):
-    pair, err = require_student()
-    if err:
-        return err
-    user, me = pair
-
-    intro = PeerIntroRequest.query.get(intro_id)
-    if not intro:
-        return jsonify({'error': 'Intro not found'}), 404
-    if intro.requester_student_id != me.id and intro.recipient_student_id != me.id:
-        return jsonify({'error': 'Forbidden'}), 403
-
-    req_profile = StudentProfile.query.get(intro.requester_student_id)
-    rec_profile = StudentProfile.query.get(intro.recipient_student_id)
-    is_requester = intro.requester_student_id == me.id
-    other = rec_profile if is_requester else req_profile
-
-    full_name = bool(intro.status == 'accepted')
-    if full_name:
-        other_out = {
-            'student_id': other.id,
-            'display_name': f'{other.first_name} {other.last_name}'.strip(),
-            'first_name': other.first_name,
-            'last_name': other.last_name,
-        }
-    else:
-        other_out = {
-            'student_id': other.id,
-            'display_name': display_name_peer(other.first_name, other.last_name),
-        }
-
-    # Build message list: initial + follow-ups when accepted
+def _peer_messages_list(intro, req_profile):
     messages_out = []
     if req_profile:
         messages_out.append(
@@ -258,6 +291,76 @@ def get_introduction(intro_id):
         )
         for m in followups:
             messages_out.append({**m.to_dict(), 'is_initial': False})
+    return messages_out
+
+
+def _student_profile_admin_full(prof):
+    if not prof:
+        return {'student_id': None, 'display_name': 'Unknown', 'first_name': None, 'last_name': None}
+    return {
+        'student_id': prof.id,
+        'display_name': f'{prof.first_name} {prof.last_name}'.strip(),
+        'first_name': prof.first_name,
+        'last_name': prof.last_name,
+    }
+
+
+@peers_bp.route('/introductions/<int:intro_id>', methods=['GET'])
+def get_introduction(intro_id):
+    pair, err = require_student_or_admin()
+    if err:
+        return err
+    user, me = pair
+
+    intro = PeerIntroRequest.query.get(intro_id)
+    if not intro:
+        return jsonify({'error': 'Intro not found'}), 404
+
+    if not getattr(user, 'is_admin', False):
+        if intro.requester_student_id != me.id and intro.recipient_student_id != me.id:
+            return jsonify({'error': 'Forbidden'}), 403
+
+    req_profile = StudentProfile.query.get(intro.requester_student_id)
+    rec_profile = StudentProfile.query.get(intro.recipient_student_id)
+
+    if getattr(user, 'is_admin', False):
+        req_out = _student_profile_admin_full(req_profile)
+        rec_out = _student_profile_admin_full(rec_profile)
+        title = 'Peer intro'
+        if req_profile and rec_profile:
+            title = f"{req_out['display_name']} ↔ {rec_out['display_name']}"
+        return jsonify(
+            {
+                'introduction': intro.to_dict(),
+                'is_requester': False,
+                'is_admin_view': True,
+                'company_name': intro.company_name,
+                'requester_student': req_out,
+                'recipient_student': rec_out,
+                'other_student': {
+                    'student_id': None,
+                    'display_name': title,
+                },
+                'messages': _peer_messages_list(intro, req_profile),
+            }
+        ), 200
+
+    is_requester = intro.requester_student_id == me.id
+    other = rec_profile if is_requester else req_profile
+
+    full_name = bool(intro.status == 'accepted')
+    if full_name:
+        other_out = {
+            'student_id': other.id,
+            'display_name': f'{other.first_name} {other.last_name}'.strip(),
+            'first_name': other.first_name,
+            'last_name': other.last_name,
+        }
+    else:
+        other_out = {
+            'student_id': other.id,
+            'display_name': display_name_peer(other.first_name, other.last_name),
+        }
 
     return jsonify(
         {
@@ -265,7 +368,7 @@ def get_introduction(intro_id):
             'is_requester': is_requester,
             'company_name': intro.company_name,
             'other_student': other_out,
-            'messages': messages_out,
+            'messages': _peer_messages_list(intro, req_profile),
         }
     ), 200
 

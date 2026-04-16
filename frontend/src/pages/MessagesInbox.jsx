@@ -47,6 +47,13 @@ function inboxErrorMessage(err) {
 }
 
 function peerIntroPreview(row) {
+  if (row.perspective === 'admin') {
+    const req = row.requester_student?.display_name
+    const rec = row.recipient_student?.display_name
+    return [req && rec ? `${req} → ${rec}` : row.other_student?.display_name, row.company_name, row.status]
+      .filter(Boolean)
+      .join(' · ')
+  }
   const st = row.status || 'pending'
   const who = row.other_student?.display_name || 'Peer'
   if (st === 'pending' && row.perspective === 'incoming') {
@@ -68,7 +75,9 @@ export default function MessagesInbox() {
   const [error, setError] = useState(null)
 
   const isStudent = user?.account_type === 'student'
-  const dashboardPath = isStudent ? '/dashboard/student' : '/dashboard/alumni'
+  const isAdmin = !!user?.is_admin
+  const dashboardPath = isAdmin ? '/admin' : isStudent ? '/dashboard/student' : '/dashboard/alumni'
+  const showPeerHub = isStudent || isAdmin
 
   const loadInbox = useCallback(async () => {
     if (!user) return
@@ -85,15 +94,20 @@ export default function MessagesInbox() {
       setTotalUnread(0)
     }
 
-    if (user.account_type === 'student') {
+    if (isStudent || isAdmin) {
       try {
         const pr = await api.get('/peers/introductions')
-        const incoming = pr.data.incoming ?? []
-        const outgoing = pr.data.outgoing ?? []
-        const merged = [...incoming, ...outgoing].sort(
-          (a, b) => new Date(b.created_at) - new Date(a.created_at)
-        )
-        setPeerRows(merged)
+        if (isAdmin) {
+          const all = pr.data.all ?? []
+          setPeerRows([...all].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+        } else {
+          const incoming = pr.data.incoming ?? []
+          const outgoing = pr.data.outgoing ?? []
+          const merged = [...incoming, ...outgoing].sort(
+            (a, b) => new Date(b.created_at) - new Date(a.created_at)
+          )
+          setPeerRows(merged)
+        }
       } catch (e) {
         console.error('Failed to load peer introductions:', e)
         setPeerRows([])
@@ -102,11 +116,12 @@ export default function MessagesInbox() {
       setPeerRows([])
     }
 
-       setLoading(false)
-  }, [user])
+    setLoading(false)
+  }, [user, isStudent, isAdmin])
 
   useEffect(() => {
-    loadInbox()
+    const t = setTimeout(() => loadInbox(), 0)
+    return () => clearTimeout(t)
   }, [loadInbox])
 
   useEffect(() => {
@@ -127,7 +142,7 @@ export default function MessagesInbox() {
       />
 
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 flex flex-col gap-6">
-        {isStudent && !loading && (
+        {showPeerHub && !loading && (
           <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
             <span className="font-medium text-gray-800">Alumni messages</span>
             <span className="text-gray-300">·</span>
@@ -136,7 +151,7 @@ export default function MessagesInbox() {
               className="font-medium hover:underline"
               style={{ color: '#BB0000' }}
             >
-              Find student peers by company
+              {isAdmin ? 'Peer intros (view all)' : 'Find student peers by company'}
             </Link>
           </div>
         )}
@@ -235,13 +250,15 @@ export default function MessagesInbox() {
           </ul>
         )}
 
-        {isStudent && !loading && peerRows.length > 0 && (
+        {showPeerHub && !loading && peerRows.length > 0 && (
           <div className="flex flex-col gap-2">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-              Peer students
+              {isAdmin ? 'All peer intros' : 'Peer students'}
             </h2>
             <p className="text-xs text-gray-500 -mt-1">
-              Introductions with other students (separate from alum matching).
+              {isAdmin
+                ? 'Read-only overview of student-to-student introductions.'
+                : 'Introductions with other students (separate from alum matching).'}
             </p>
             <ul className="flex flex-col gap-2">
               {peerRows.map(row => (
@@ -251,12 +268,16 @@ export default function MessagesInbox() {
                     className="w-full flex text-left bg-white rounded-2xl border border-gray-100 p-4 gap-4 hover:border-gray-200 transition-colors"
                   >
                     <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 bg-gray-700">
-                      {(row.other_student?.display_name || 'P').slice(0, 2).toUpperCase()}
+                      {row.perspective === 'admin'
+                        ? `${(row.requester_student?.display_name || 'P').slice(0, 1)}${(row.recipient_student?.display_name || 'P').slice(0, 1)}`.toUpperCase()
+                        : (row.other_student?.display_name || 'P').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <span className="font-semibold text-gray-900 truncate">
-                          {row.other_student?.display_name || 'Peer'}
+                          {row.perspective === 'admin'
+                            ? row.other_student?.display_name || 'Peer intro'
+                            : row.other_student?.display_name || 'Peer'}
                         </span>
                         <span className="text-xs text-gray-400 flex-shrink-0">
                           {formatListTime(row.created_at)}
@@ -264,7 +285,9 @@ export default function MessagesInbox() {
                       </div>
                       <p
                         className={`text-sm mt-0.5 truncate ${
-                          row.status === 'pending' && row.perspective === 'incoming'
+                          !isAdmin &&
+                          row.status === 'pending' &&
+                          row.perspective === 'incoming'
                             ? 'text-gray-900 font-medium'
                             : 'text-gray-500'
                         }`}
@@ -272,7 +295,7 @@ export default function MessagesInbox() {
                         {peerIntroPreview(row)}
                       </p>
                     </div>
-                    {row.status === 'pending' && row.perspective === 'incoming' && (
+                    {!isAdmin && row.status === 'pending' && row.perspective === 'incoming' && (
                       <span
                         className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-400 mt-2"
                         title="Needs your response"

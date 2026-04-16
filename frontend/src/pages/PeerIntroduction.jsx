@@ -1,7 +1,7 @@
 // Async thread for a student peer intro (separate from alumni match messages).
 
-import { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 import AppHeader from '../components/AppHeader'
@@ -42,6 +42,8 @@ function Bubble({ body, sentAt, isMine }) {
 
 export default function PeerIntroduction() {
   const { introId } = useParams()
+  const [searchParams] = useSearchParams()
+  const fromPeers = searchParams.get('from') === 'peers'
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -55,7 +57,8 @@ export default function PeerIntroduction() {
 
   const bottomRef = useRef(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true)
     setError('')
     try {
       const res = await api.get(`/peers/introductions/${introId}`)
@@ -66,11 +69,11 @@ export default function PeerIntroduction() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [introId])
 
   useEffect(() => {
     load()
-  }, [introId])
+  }, [load])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -79,8 +82,18 @@ export default function PeerIntroduction() {
   const intro = detail?.introduction
   const status = intro?.status
   const isRequester = detail?.is_requester
-  const canMessage = status === 'accepted'
+  const isAdminView = !!detail?.is_admin_view
+  const canMessage = !isAdminView && status === 'accepted'
   const other = detail?.other_student
+
+  const goBack = () => {
+    if (isAdminView) {
+      if (fromPeers) navigate('/peers')
+      else navigate('/messages')
+      return
+    }
+    navigate('/peers')
+  }
 
   const handleSend = async () => {
     const trimmed = body.trim()
@@ -129,14 +142,17 @@ export default function PeerIntroduction() {
     }
   }
 
-  const title = other?.display_name || 'Peer conversation'
+  const title =
+    isAdminView && detail?.requester_student && detail?.recipient_student
+      ? `${detail.requester_student.display_name} ↔ ${detail.recipient_student.display_name}`
+      : other?.display_name || 'Peer conversation'
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <AppHeader
         title={title}
         showBack
-        onBack={() => navigate('/peers')}
+        onBack={goBack}
         maxWidthClassName="max-w-2xl"
       />
 
@@ -146,7 +162,12 @@ export default function PeerIntroduction() {
             Topic: <span className="font-medium text-gray-700">{detail.company_name}</span>
           </p>
         )}
-        {status === 'pending' && !isRequester && (
+        {isAdminView && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">
+            Admin read-only — you can view this thread but cannot accept, decline, or send messages.
+          </p>
+        )}
+        {status === 'pending' && !isRequester && !isAdminView && (
           <div className="mt-3 flex flex-wrap gap-2 items-center">
             <button
               type="button"
@@ -168,7 +189,7 @@ export default function PeerIntroduction() {
             <span className="text-xs text-gray-500">You can message after you accept.</span>
           </div>
         )}
-        {status === 'pending' && isRequester && (
+        {status === 'pending' && isRequester && !isAdminView && (
           <p className="mt-3 text-sm text-gray-500">Waiting for them to accept your intro.</p>
         )}
         {status === 'declined' && (
@@ -208,35 +229,37 @@ export default function PeerIntroduction() {
         )}
       </main>
 
-      <div className="bg-white border-t border-gray-100 sticky bottom-0">
-        <div className="max-w-2xl mx-auto px-4 py-3">
-          {sendError && <p className="text-xs text-red-600 mb-2">{sendError}</p>}
-          <div className="flex items-end gap-3">
-            <textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={!canMessage}
-              rows={1}
-              placeholder={canMessage ? 'Write a message…' : 'Messaging opens when the intro is accepted.'}
-              className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-200 disabled:bg-gray-50 disabled:text-gray-400"
-              style={{ maxHeight: '120px', overflowY: 'auto' }}
-            />
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending || !body.trim() || !canMessage}
-              className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 flex-shrink-0"
-              style={{ backgroundColor: '#BB0000' }}
-            >
-              {sending ? '…' : 'Send'}
-            </button>
+      {!isAdminView && (
+        <div className="bg-white border-t border-gray-100 sticky bottom-0">
+          <div className="max-w-2xl mx-auto px-4 py-3">
+            {sendError && <p className="text-xs text-red-600 mb-2">{sendError}</p>}
+            <div className="flex items-end gap-3">
+              <textarea
+                value={body}
+                onChange={e => setBody(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={!canMessage}
+                rows={1}
+                placeholder={canMessage ? 'Write a message…' : 'Messaging opens when the intro is accepted.'}
+                className="flex-1 border border-gray-200 rounded-lg px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-200 disabled:bg-gray-50 disabled:text-gray-400"
+                style={{ maxHeight: '120px', overflowY: 'auto' }}
+              />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={sending || !body.trim() || !canMessage}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 flex-shrink-0"
+                style={{ backgroundColor: '#BB0000' }}
+              >
+                {sending ? '…' : 'Send'}
+              </button>
+            </div>
+            {canMessage && (
+              <p className="text-xs text-gray-400 mt-2">Enter to send · Shift+Enter for new line</p>
+            )}
           </div>
-          {canMessage && (
-            <p className="text-xs text-gray-400 mt-2">Enter to send · Shift+Enter for new line</p>
-          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
