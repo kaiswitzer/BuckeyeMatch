@@ -113,3 +113,38 @@ CREATE TABLE IF NOT EXISTS match_ratings (
     rated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (match_id) REFERENCES matches(id)
 );
+
+-- Past internships / roles for students (opt-in visibility to other students)
+CREATE TABLE IF NOT EXISTS student_experience (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    company_name TEXT NOT NULL,
+    role_name TEXT,
+    term_label TEXT,
+    visible_to_peers INTEGER NOT NULL DEFAULT 0 CHECK(visible_to_peers IN (0, 1)),
+    FOREIGN KEY (student_id) REFERENCES student_profiles(id)
+);
+
+-- Student-to-student intro requests (not alumni matches)
+CREATE TABLE IF NOT EXISTS peer_intro_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requester_student_id INTEGER NOT NULL,
+    recipient_student_id INTEGER NOT NULL,
+    company_name TEXT NOT NULL,
+    initial_message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_student_id) REFERENCES student_profiles(id),
+    FOREIGN KEY (recipient_student_id) REFERENCES student_profiles(id)
+);
+
+CREATE TABLE IF NOT EXISTS peer_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    intro_request_id INTEGER NOT NULL,
+    sender_id INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP,
+    FOREIGN KEY (intro_request_id) REFERENCES peer_intro_requests(id),
+    FOREIGN KEY (sender_id) REFERENCES users(id)
+);

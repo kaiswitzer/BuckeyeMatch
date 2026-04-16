@@ -493,6 +493,13 @@ export default function StudentDashboard() {
                 Admin
               </Link>
             )}
+            <Link
+              to="/peers"
+              className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+              style={{ borderColor: '#BB0000', color: '#BB0000' }}
+            >
+              Student peers
+            </Link>
             <button
               onClick={() => setShowMilestone(true)}
               className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
