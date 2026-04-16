@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../api/axios'
 import AppHeader from '../components/AppHeader'
@@ -29,11 +29,41 @@ function previewLine(lastMessage, matchStatus) {
   return t.length > 100 ? `${t.slice(0, 97)}…` : t
 }
 
+function inboxErrorMessage(err) {
+  const status = err.response?.status
+  const server = err.response?.data?.error
+  if (status === 401) return 'Your session expired. Log in again.'
+  if (status === 404) {
+    return (
+      'The messages inbox API was not found (404). If you are on production, deploy the latest ' +
+      'backend that includes GET /api/messages/inbox. In local dev, run the Flask app on port 5001 ' +
+      'so the Vite proxy can reach it.'
+    )
+  }
+  if (!err.response && err.message) {
+    return `Could not reach the server (${err.message}). Is the API running?`
+  }
+  return server || err.message || 'Could not load messages. Try again.'
+}
+
+function peerIntroPreview(row) {
+  const st = row.status || 'pending'
+  const who = row.other_student?.display_name || 'Peer'
+  if (st === 'pending' && row.perspective === 'incoming') {
+    return `${who} wants to connect · ${row.company_name || 'Company'}`
+  }
+  if (st === 'pending') {
+    return `Waiting on ${who} · ${row.company_name || 'Company'}`
+  }
+  return `${row.preview || 'Peer thread'} · ${st}`
+}
+
 export default function MessagesInbox() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [conversations, setConversations] = useState([])
   const [totalUnread, setTotalUnread] = useState(0)
+  const [peerRows, setPeerRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -41,18 +71,39 @@ export default function MessagesInbox() {
   const dashboardPath = isStudent ? '/dashboard/student' : '/dashboard/alumni'
 
   const loadInbox = useCallback(async () => {
+    if (!user) return
     setError(null)
+    setLoading(true)
     try {
       const res = await api.get('/messages/inbox')
       setConversations(res.data.conversations ?? [])
       setTotalUnread(res.data.total_unread ?? 0)
     } catch (err) {
       console.error('Failed to load inbox:', err)
-      setError('Could not load messages. Try again.')
-    } finally {
-      setLoading(false)
+      setError(inboxErrorMessage(err))
+      setConversations([])
+      setTotalUnread(0)
     }
-  }, [])
+
+    if (user.account_type === 'student') {
+      try {
+        const pr = await api.get('/peers/introductions')
+        const incoming = pr.data.incoming ?? []
+        const outgoing = pr.data.outgoing ?? []
+        const merged = [...incoming, ...outgoing].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        )
+        setPeerRows(merged)
+      } catch (e) {
+        console.error('Failed to load peer introductions:', e)
+        setPeerRows([])
+      }
+    } else {
+      setPeerRows([])
+    }
+
+       setLoading(false)
+  }, [user])
 
   useEffect(() => {
     loadInbox()
@@ -75,7 +126,21 @@ export default function MessagesInbox() {
         maxWidthClassName="max-w-2xl"
       />
 
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 flex flex-col gap-4">
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 flex flex-col gap-6">
+        {isStudent && !loading && (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+            <span className="font-medium text-gray-800">Alumni messages</span>
+            <span className="text-gray-300">·</span>
+            <Link
+              to="/peers"
+              className="font-medium hover:underline"
+              style={{ color: '#BB0000' }}
+            >
+              Find student peers by company
+            </Link>
+          </div>
+        )}
+
         {loading && (
           <div className="flex flex-col gap-3">
             {[1, 2, 3].map(i => (
@@ -107,9 +172,9 @@ export default function MessagesInbox() {
             >
               💬
             </div>
-            <p className="font-semibold text-gray-800 text-base">No conversations yet</p>
+            <p className="font-semibold text-gray-800 text-base">No alumni conversations yet</p>
             <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-              When you match with someone and exchange messages, they will appear here.
+              When you match with an alum and exchange messages, they will appear here.
             </p>
           </div>
         )}
@@ -168,6 +233,57 @@ export default function MessagesInbox() {
               )
             })}
           </ul>
+        )}
+
+        {isStudent && !loading && peerRows.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              Peer students
+            </h2>
+            <p className="text-xs text-gray-500 -mt-1">
+              Introductions with other students (separate from alum matching).
+            </p>
+            <ul className="flex flex-col gap-2">
+              {peerRows.map(row => (
+                <li key={`peer-${row.id}-${row.perspective}`}>
+                  <Link
+                    to={`/peers/introductions/${row.id}`}
+                    className="w-full flex text-left bg-white rounded-2xl border border-gray-100 p-4 gap-4 hover:border-gray-200 transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 bg-gray-700">
+                      {(row.other_student?.display_name || 'P').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-gray-900 truncate">
+                          {row.other_student?.display_name || 'Peer'}
+                        </span>
+                        <span className="text-xs text-gray-400 flex-shrink-0">
+                          {formatListTime(row.created_at)}
+                        </span>
+                      </div>
+                      <p
+                        className={`text-sm mt-0.5 truncate ${
+                          row.status === 'pending' && row.perspective === 'incoming'
+                            ? 'text-gray-900 font-medium'
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        {peerIntroPreview(row)}
+                      </p>
+                    </div>
+                    {row.status === 'pending' && row.perspective === 'incoming' && (
+                      <span
+                        className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-400 mt-2"
+                        title="Needs your response"
+                        aria-hidden
+                      />
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {!loading && !error && totalUnread > 0 && (

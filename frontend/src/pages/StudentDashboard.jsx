@@ -427,6 +427,7 @@ export default function StudentDashboard() {
     total_unread: 0,
     pending_pairing_requests: 0,
   })
+  const [peerPendingIntros, setPeerPendingIntros] = useState(0)
 
   const fetchMessageSummary = useCallback(async () => {
     try {
@@ -440,11 +441,22 @@ export default function StudentDashboard() {
     }
   }, [])
 
+  const fetchPeerIntroAttention = useCallback(async () => {
+    try {
+      const res = await api.get('/peers/introductions')
+      const inc = res.data.incoming ?? []
+      setPeerPendingIntros(inc.filter(i => i.status === 'pending').length)
+    } catch {
+      setPeerPendingIntros(0)
+    }
+  }, [])
+
   const fetchMatches = async () => {
     try {
       const res = await api.get('/matches/mine')
       setMatches(res.data.matches ?? [])
       await fetchMessageSummary()
+      await fetchPeerIntroAttention()
     } catch (err) {
       console.error('Failed to load matches:', err)
       setError('Something went wrong loading your matches. Try refreshing.')
@@ -459,11 +471,14 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchMessageSummary()
+      if (document.visibilityState === 'visible') {
+        fetchMessageSummary()
+        fetchPeerIntroAttention()
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [fetchMessageSummary])
+  }, [fetchMessageSummary, fetchPeerIntroAttention])
 
   useEffect(() => {
     async function fetchHeaderName() {
@@ -542,6 +557,22 @@ export default function StudentDashboard() {
                 />
               )}
             </div>
+            <Link
+              to="/peers"
+              className="relative text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"
+              style={{ borderColor: '#BB0000', color: '#BB0000' }}
+            >
+              Peers
+              {peerPendingIntros > 0 && (
+                <span
+                  className="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-0.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                  style={{ backgroundColor: '#BB0000' }}
+                  title="Pending peer intro requests"
+                >
+                  {peerPendingIntros > 99 ? '99+' : peerPendingIntros}
+                </span>
+              )}
+            </Link>
             <button
               onClick={() => setShowMilestone(true)}
               className="text-sm font-medium px-3 py-1.5 rounded-lg border transition hover:bg-gray-50"

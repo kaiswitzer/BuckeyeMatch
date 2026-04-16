@@ -136,7 +136,8 @@ def inbox():
         )
 
         unread = (
-            Message.query.filter_by(match_id=m.id, read_at=None)
+            Message.query.filter_by(match_id=m.id)
+            .filter(Message.read_at.is_(None))
             .filter(Message.sender_id != user.id)
             .count()
         )
