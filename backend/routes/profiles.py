@@ -16,7 +16,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from models import db
 from models.user import User
-from models.student import StudentProfile, StudentTarget, SurveyResponse
+from models.student import StudentProfile, StudentTarget, SurveyResponse, StudentExperience
 from models.alumni import AlumniProfile, AlumniHistory
 import jwt
 
@@ -102,6 +102,42 @@ def create_student_profile():
     db.session.add(profile)
     db.session.commit()
     return jsonify({'message': 'Profile created', 'profile': profile.to_dict()}), 201
+
+
+@profiles_bp.route('/student/experience', methods=['POST'])
+def save_student_experience():
+    """
+    Replaces internship / role history for peer discovery (opt-in per row).
+    Expects: { experience: [ { company_name, role_name, term_label, visible_to_peers }, ... ] }
+    """
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    profile = StudentProfile.query.filter_by(user_id=user.id).first()
+    if not profile:
+        return jsonify({'error': 'Complete your basic profile first'}), 400
+
+    data = request.get_json() or {}
+    items = data.get('experience', [])
+
+    StudentExperience.query.filter_by(student_id=profile.id).delete()
+
+    for row in items:
+        company = (row.get('company_name') or '').strip()
+        if not company:
+            continue
+        exp = StudentExperience(
+            student_id=profile.id,
+            company_name=company,
+            role_name=(row.get('role_name') or '').strip() or None,
+            term_label=(row.get('term_label') or '').strip() or None,
+            visible_to_peers=bool(row.get('visible_to_peers')),
+        )
+        db.session.add(exp)
+
+    db.session.commit()
+    return jsonify({'message': 'Experience saved', 'profile': profile.to_dict()}), 200
 
 
 @profiles_bp.route('/student/targets', methods=['POST'])

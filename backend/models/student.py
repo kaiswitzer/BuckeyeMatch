@@ -24,6 +24,12 @@ class StudentProfile(db.Model):
     # One student has many targets — like a @OneToMany in Java
     targets = db.relationship('StudentTarget', backref='student', lazy=True)
     survey = db.relationship('SurveyResponse', backref='student', uselist=False)
+    experiences = db.relationship(
+        'StudentExperience',
+        backref='student',
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
 
     def to_dict(self):
         return {
@@ -36,7 +42,28 @@ class StudentProfile(db.Model):
             'year': self.year,
             'hometown': self.hometown,
             'bio': self.bio,
-            'targets': [t.to_dict() for t in self.targets]
+            'targets': [t.to_dict() for t in self.targets],
+            'experience': [e.to_dict() for e in self.experiences],
+        }
+
+
+class StudentExperience(db.Model):
+    __tablename__ = 'student_experience'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('student_profiles.id'), nullable=False)
+    company_name = db.Column(db.Text, nullable=False)
+    role_name = db.Column(db.Text)
+    term_label = db.Column(db.Text)
+    visible_to_peers = db.Column(db.Boolean, nullable=False, default=False)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'company_name': self.company_name,
+            'role_name': self.role_name,
+            'term_label': self.term_label,
+            'visible_to_peers': bool(self.visible_to_peers),
         }
 
 

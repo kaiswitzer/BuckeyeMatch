@@ -64,6 +64,14 @@ export default function StudentProfile() {
   const [savedTargets, setSavedTargets]   = useState(false)
   const [errorTargets, setErrorTargets]   = useState('')
 
+  // Internships / roles (optional, for peer discovery)
+  const [experience, setExperience] = useState([
+    { company_name: '', role_name: '', term_label: '', visible_to_peers: false },
+  ])
+  const [savingExp, setSavingExp] = useState(false)
+  const [savedExp, setSavedExp] = useState(false)
+  const [errorExp, setErrorExp] = useState('')
+
   // Section 3 — survey
   const [survey, setSurvey]             = useState({})
   const [savingSurvey, setSavingSurvey] = useState(false)
@@ -93,6 +101,18 @@ export default function StudentProfile() {
           })))
         }
 
+        const ex = p.experience
+        if (Array.isArray(ex) && ex.length > 0) {
+          setExperience(
+            ex.map(row => ({
+              company_name: row.company_name ?? '',
+              role_name: row.role_name ?? '',
+              term_label: row.term_label ?? '',
+              visible_to_peers: !!row.visible_to_peers,
+            }))
+          )
+        }
+
         if (p.survey?.responses) {
           setSurvey(p.survey.responses)
         }
@@ -118,6 +138,34 @@ export default function StudentProfile() {
       setSavingBasic(false)
     }
   }
+
+  const saveExperience = async () => {
+    setErrorExp('')
+    const rows = experience
+      .filter(e => e.company_name.trim())
+      .map(e => ({
+        company_name: e.company_name.trim(),
+        role_name: e.role_name.trim(),
+        term_label: e.term_label.trim(),
+        visible_to_peers: !!e.visible_to_peers,
+      }))
+    setSavingExp(true)
+    try {
+      await api.post('/profiles/student/experience', { experience: rows })
+      setSavedExp(true)
+      setTimeout(() => setSavedExp(false), 2000)
+    } catch (err) {
+      setErrorExp(err.response?.data?.error || 'Something went wrong.')
+    } finally {
+      setSavingExp(false)
+    }
+  }
+
+  const addExperienceRow = () =>
+    setExperience([...experience, { company_name: '', role_name: '', term_label: '', visible_to_peers: false }])
+  const updateExperience = (i, field, val) =>
+    setExperience(experience.map((row, idx) => (idx === i ? { ...row, [field]: val } : row)))
+  const removeExperience = i => setExperience(experience.filter((_, idx) => idx !== i))
 
   const saveTargets = async () => {
     setErrorTargets('')
@@ -269,6 +317,73 @@ export default function StudentProfile() {
               />
             </div>
           </div>
+        </Section>
+
+        {/* ── Internships (peer discovery) ── */}
+        <Section
+          title="Internships & roles (optional)"
+          onSave={saveExperience}
+          saving={savingExp}
+          saved={savedExp}
+          error={errorExp}
+        >
+          <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+            Add where you&apos;ve interned or worked. Only rows you mark &quot;visible to peers&quot;
+            can appear when other students search that company — there are no follower counts or public
+            profiles.
+          </p>
+          <div className="space-y-4">
+            {experience.map((row, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 p-4 space-y-3 bg-gray-50/50">
+                <div className="flex gap-2 items-start">
+                  <div className="flex-1 space-y-2">
+                    <input
+                      value={row.company_name}
+                      onChange={e => updateExperience(i, 'company_name', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                      placeholder="Company"
+                    />
+                    <input
+                      value={row.role_name}
+                      onChange={e => updateExperience(i, 'role_name', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                      placeholder="Role (optional)"
+                    />
+                    <input
+                      value={row.term_label}
+                      onChange={e => updateExperience(i, 'term_label', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
+                      placeholder="Term (optional, e.g. Summer 2025)"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExperience(i)}
+                    className="text-gray-300 hover:text-red-500 transition-colors mt-2 text-lg flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={row.visible_to_peers}
+                    onChange={e => updateExperience(i, 'visible_to_peers', e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Show this row to other students searching this company
+                </label>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addExperienceRow}
+            className="mt-4 text-sm font-medium block"
+            style={{ color: '#BB0000' }}
+          >
+            + Add another role
+          </button>
         </Section>
 
         {/* ── Section 2: Target Companies ── */}

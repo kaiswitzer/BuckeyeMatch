@@ -59,9 +59,10 @@ def create_app():
     with app.app_context():
         # Import all models so SQLAlchemy knows about them before creating tables
         from models.user import User
-        from models.student import StudentProfile, StudentTarget, SurveyResponse
+        from models.student import StudentProfile, StudentTarget, SurveyResponse, StudentExperience
         from models.alumni import AlumniProfile, AlumniHistory
         from models.match import Match, Message, Milestone, MatchRating
+        from models.peer import PeerIntroRequest, PeerMessage
 
         # Creates all tables in the database if they don't already exist.
         # Safe to run every time — won't overwrite existing data.
@@ -89,6 +90,8 @@ def create_app():
         app.register_blueprint(matches_bp, url_prefix='/api/matches')
         from routes.messages import messages_bp
         app.register_blueprint(messages_bp, url_prefix='/api/messages')
+        from routes.peers import peers_bp
+        app.register_blueprint(peers_bp, url_prefix='/api/peers')
         from routes.milestones import milestones_bp
         app.register_blueprint(milestones_bp, url_prefix='/api/milestones')
 

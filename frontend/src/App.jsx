@@ -24,6 +24,8 @@ import AlumniProfile from './pages/AlumniProfile'
 import StudentProfileView from './pages/StudentProfileView'
 import AlumniProfileView from './pages/AlumniProfileView'
 import Admin from './pages/Admin'
+import StudentPeers from './pages/StudentPeers'
+import PeerIntroduction from './pages/PeerIntroduction'
 
 // ProtectedRoute wraps any page that requires login.
 // If the user isn't logged in, it redirects to /login.
@@ -100,6 +102,12 @@ function AppRoutes() {
       } />
       <Route path="/profile/student" element={
         <ProtectedRoute accountType="student"><StudentProfile /></ProtectedRoute>
+      } />
+      <Route path="/peers" element={
+        <ProtectedRoute accountType="student"><StudentPeers /></ProtectedRoute>
+      } />
+      <Route path="/peers/introductions/:introId" element={
+        <ProtectedRoute accountType="student"><PeerIntroduction /></ProtectedRoute>
       } />
       <Route path="/profile/alumni" element={
         <ProtectedRoute accountType="alumni"><AlumniProfile /></ProtectedRoute>
